@@ -1,12 +1,47 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
 import garf
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import numpy as np
+import uproot
+import ntpath
 
-print("Hello world")
 
-garf.my_hello_world()
+# -----------------------------------------------------------------------------
+# Read command line arguments
+if (len(sys.argv) <= 1):
+    print('Package garf: GATE ARF')
+    print('Usage:',ntpath.basename(sys.argv[0]),'<data.root>')
+    print('Help: Simple plot of the training dataset')
+    exit()
 
-print('ixi')
-garf.my_hello_world2()
 
+# -----------------------------------------------------------------------------
+filename = sys.argv[1]
+theta, phi, E, w = garf.open_training_dataset(filename)
+
+b = 100
+
+f, ax = plt.subplots(2, 2, figsize=(10,10))
+
+n, bins, patches = ax[0,0].hist(theta, b, density=True, facecolor='g', alpha=0.35)
+n, bins, patches = ax[0,1].hist(phi, b, density=True, facecolor='g', alpha=0.35)
+n, bins, patches = ax[1,0].hist(E*1000, b, density=True, facecolor='b', alpha=0.35)
+n, bins, patches = ax[1,1].hist(w[w>0], b, density=False, facecolor='r', alpha=0.35)
+
+ax[0,0].set_xlabel('Theta angle (deg)')
+ax[0,1].set_xlabel('Phi angle (deg)')
+ax[1,0].set_xlabel('Energy (keV)')
+ax[1,1].set_xlabel('Energy window #')
+
+n = len(w)
+n_nd = len(w[w==0])
+print('Nb of particles:              {}'.format(n))
+print('Nb of non-detected particles: {} {}%'.format(n_nd, n_nd/n*100))
+print('Nb of detected particles:     {} {}%'.format(n-n_nd, (n-n_nd)/n*100))
+
+plt.tight_layout()
+plt.show()
