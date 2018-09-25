@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+import garf
+import ntpath
+import time
+import json
+import socket
+import torch
+import click
+
+
+# -----------------------------------------------------------------------------
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+@click.command(context_settings=CONTEXT_SETTINGS)
+@click.argument('data_root')
+@click.argument('N')
+@click.argument('nn_pth')
+@click.argument('output_mhd')
+
+@click.option('--gpu_batch_size', '-b',
+              default=int(1e6),
+              help='Large value is faster, but may require too much GPU memory.')
+
+@click.option('--size', '-s',
+              default=int(128),
+              help='Image size in pixel (def = 128).')
+
+@click.option('--spacing', '-p',
+              default=4.41806,
+              help='Image spacing in mm (def = 4.41806).')
+
+# 58+(9.525/2.0) # collimator + half crystal length in mm
+#backside_position = -36.4+5-13.3375
+#backside_thickness = 80
+#coll_l = spect_head_size/2-backside_position-backside_thickness/2
+
+@click.option('--length', '-l',
+              default=99,
+              help='Collimator length + half crystal length in mm (def = 99 mm).')
+
+@click.option('--events', '-n',
+              default=float(1),
+              help='Scale the image for N primary events (def = 1).')
+
+
+# -----------------------------------------------------------------------------
+def garf_build_arf_image_with_nn(data_root,
+                                 n,
+                                 nn_pth,
+                                 output_mhd,
+                                 gpu_batch_size,
+                                 size, spacing, length, events):
+    '''
+    \b
+    Build spect image from ARF data.root with the given NN.
+    <DATA_ROOT> : ARF root data from the simulation
+    <N>         :
+    <NN_PTH>    : NN
+    '''
+    data_filename = data_root
+    model_filename = nn_pth
+    output_filename = output_mhd
+
+    nn, model = garf.load_nn(model_filename)
+    print("\nLoading dataset...")
+    data, x, y, theta, phi, E = garf.load_test_dataset(data_filename)
+
+    param = {}
+    param['gpu_batch_size'] = gpu_batch_size
+    param['size'] = size
+    param['spacing'] = spacing
+    param['length'] = length
+    param['N_scale'] = events
+    param['N_dataset'] = n
+    garf.build_arf_image_with_nn(nn, model, data, output_mhd, param)
+
+
+# -----------------------------------------------------------------------------
+if __name__ == '__main__':
+    garf_build_arf_image_with_nn()
