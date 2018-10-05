@@ -8,6 +8,9 @@ import time
 import json
 import socket
 import click
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
 
 # -----------------------------------------------------------------------------
 ##     print('Help: print info of a trained ARF-nn.')
@@ -25,6 +28,12 @@ def garf_nn_info(filename_pth):
     nn, model = garf.load_nn(filename_pth)
     p = nn['model_data']
     garf.print_nn_params(p)
+
+    loss_values = p['loss_values']
+    x = np.arange(0,len(loss_values))
+    plt.plot(x, loss_values)
+    plt.tight_layout()
+    plt.show()
 
 
 # -----------------------------------------------------------------------------

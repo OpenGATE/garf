@@ -11,6 +11,7 @@ from torch.autograd import Variable
 import copy
 import SimpleITK as sitk
 import time
+from tqdm import tqdm
 
 
 # -----------------------------------------------------------------------------
@@ -20,7 +21,10 @@ def print_nn_params(params):
     '''
     for e in params:
         if (e[0] != '#'):
-            print(e+' : '+str(params[e]))
+            if (e != 'loss_values'):
+                print(e+' : '+str(params[e]))
+            else:
+                print(e+' : '+str(len(params[e]))+' values')
 
 
 
@@ -93,6 +97,7 @@ class Sampler_nn(Sampler):
         for i in range(self.n_batches):
             # random sampling with replacement
             yield (torch.rand(self.batch_size) * self.data_size).long()
+            #yield (torch.randperm(self.batch_size) * self.data_size).long()
 
     def __len__(self):
         return self.n_batches
@@ -177,7 +182,23 @@ def train_nn(x_train, y_train, params):
     batch_size = model_data['batch_size']
     epoch_store_every = model_data['epoch_store_every']
     sampler = Sampler_nn(train_data, epoch_size, batch_size)
-    train_loader = DataLoader(train_data, batch_sampler=sampler)
+
+    # FIXME
+    print('train loader1')
+    #train_loader = DataLoader(train_data, batch_sampler=sampler)
+    #train_loader = DataLoader(train_data, batch_sampler=torch.utils.data.sampler.BatchSampler)
+    # print('train loader2')
+    print(x_train.shape)
+    print(y_train.shape)
+    train_data2 = np.column_stack((x_train, y_train))
+    print(train_data2.shape)
+    train_loader2 = DataLoader(train_data2,
+                               batch_size=batch_size,
+                               num_workers=1,
+                               # pin_memory=True,
+                               shuffle=True,  ## if false ~20% faster, seems identical
+                               drop_last=True)
+    print('done')
 
     # Create the main NN
     H = model_data['H']
@@ -215,6 +236,7 @@ def train_nn(x_train, y_train, params):
 
     # Main loop
     print('\nStart learning ...')
+    pbar = tqdm(total=n_epochs_max + 1, disable=not params['progress_bar'])
     for epoch in range(1, n_epochs_max + 1):
 
         # ---------------------------
@@ -222,8 +244,17 @@ def train_nn(x_train, y_train, params):
         model.train()
         train_loss = 0.
         n_samples_processed = 0
-        for X, Y in train_loader:
-            X, Y = Variable(X).type(dtypef), Variable(Y).type(dtypei)
+        #for X, Y in train_loader:
+        #    X, Y = Variable(X).type(dtypef), Variable(Y).type(dtypei)
+        for batch_idx, data in enumerate(train_loader2):
+            #print('batch_idx', batch_idx)
+            #print(data)
+            #print('data shape',data.shape)
+            x = data[:,0:3]
+            #print('x', x.shape)
+            y = data[:,3]
+            #print('y', y.shape)
+            X, Y = Variable(x).type(dtypef), Variable(y).type(dtypei)
 
             # Forward pass
             Y_out = model(X)
@@ -257,7 +288,7 @@ def train_nn(x_train, y_train, params):
             best_loss = mean_loss
             best_epoch = epoch
         elif epoch - best_epoch > early_stopping:
-            print('{} epochs without improvement, early stop.'
+            tqdm.write('{} epochs without improvement, early stop.'
                   .format(early_stopping))
             break
 
@@ -266,9 +297,8 @@ def train_nn(x_train, y_train, params):
 
         # print iterations
         # if (epoch % percent == 0):
-        print('Epoch {} '.format(epoch),
-              'Negative log-likelihood: {:.5f}, {:.5f}, best {:.5f} {:.0f}'.
-              format(train_loss, mean_loss, best_loss, best_epoch))
+        tqdm.write('Epoch {} Negative log-likelihood: {:.5f}, {:.5f}, best {:.5f} {:.0f}'.
+              format(epoch, train_loss, mean_loss, best_loss, best_epoch))
 
         # Check if need to store this epoch
         if (epoch % epoch_store_every == 0 or best_train_loss < previous_best):
@@ -279,6 +309,9 @@ def train_nn(x_train, y_train, params):
             nn['optim']['model_state'].append(state)
             nn['optim']['data'].append(optim_data)
             previous_best = best_train_loss
+
+        # update progress bar
+        pbar.update(1)
 
     # end for loop
     print("Training done. Best = ", best_loss, best_epoch)
@@ -320,45 +353,6 @@ def load_nn(filename):
     model = Net_v1(H, L, n_ene_win)
     model.load_state_dict(state)
     return nn, model
-
-
-# -----------------------------------------------------------------------------
-def load_test_dataset(filename):
-    '''
-    Load a test dataset in root format (theta, phi, E, x, y)
-    '''
-
-    # Check if file exist
-    if (not os.path.isfile(filename)):
-        print("File '"+filename+"' does not exist.")
-        exit()
-
-    # Check if this is a root file
-    try:
-        f = uproot.open(filename)
-    except Exception:
-        print("File '"+filename+"' cannot be opened, not a root file ?")
-        exit()
-
-    # Look for a single key named "ARF (training)"
-    k = f.keys()
-    try:
-        data = f['ARF (testing)']
-    except Exception:
-        print("This root file is not a ARF (testing), keys are: ", f.keys())
-        exit()
-
-    # Convert to arrays
-    # print(data.keys())
-    a = data.arrays()
-    theta = a[b'Theta']
-    phi = a[b'Phi']
-    E = a[b'E']
-    x = a[b'X']
-    y = a[b'Y']
-    data = np.column_stack((theta, phi, E, x, y))
-
-    return data, theta, phi, E, x, y
 
 
 # -----------------------------------------------------------------------------

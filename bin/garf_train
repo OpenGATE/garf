@@ -15,7 +15,8 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.argument('param')
 @click.argument('data')
 @click.argument('output')
-def garf_train(param, data, output):
+@click.option('--progress-bar/--no-progress-bar', default=True)
+def garf_train(param, data, output, progress_bar):
     '''
     \b
     Train a ARF-nn (neural network) from a training dataset.
@@ -26,11 +27,12 @@ def garf_train(param, data, output):
     output_filename = output
 
     # Read training dataset
-    data, theta, phi, E, w = garf.open_training_dataset(data_filename)
+    data, theta, phi, E, w = garf.load_training_dataset(data_filename)
 
     # Read parameters
     param_file = open(param_filename).read()
     params = json.loads(param_file)
+    params['progress_bar'] = progress_bar
 
     # Print info
     print('Training dataset',data_filename)

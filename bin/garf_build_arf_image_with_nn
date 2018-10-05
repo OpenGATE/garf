@@ -20,7 +20,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.argument('output_mhd')
 
 @click.option('--gpu_batch_size', '-b',
-              default=int(1e6),
+              default=1e6,
               help='Large value is faster, but may require too much GPU memory.')
 
 @click.option('--size', '-s',
@@ -56,7 +56,7 @@ def garf_build_arf_image_with_nn(data_root,
     \b
     Build spect image from ARF data.root with the given NN.
     <DATA_ROOT> : ARF root data from the simulation
-    <N>         :
+    <N>         : 
     <NN_PTH>    : NN
     '''
     data_filename = data_root
@@ -68,7 +68,7 @@ def garf_build_arf_image_with_nn(data_root,
     data, x, y, theta, phi, E = garf.load_test_dataset(data_filename)
 
     param = {}
-    param['gpu_batch_size'] = gpu_batch_size
+    param['gpu_batch_size'] = int(gpu_batch_size)
     param['size'] = size
     param['spacing'] = spacing
     param['length'] = length

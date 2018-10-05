@@ -20,6 +20,7 @@ setuptools.setup(
     ),
     scripts=[
         'bin/garf_plot_training_dataset',
+        'bin/garf_plot_test_dataset',
         'bin/garf_train',
         'bin/garf_nn_info',
         'bin/garf_build_arf_image_with_nn']

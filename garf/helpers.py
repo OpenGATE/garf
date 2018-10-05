@@ -5,9 +5,9 @@ import uproot
 import copy
 
 # -----------------------------------------------------------------------------
-def open_training_dataset(filename):
+def load_training_dataset(filename):
     '''
-    Open a training dataset in root format (theta, phi, E, w)
+    Load a training dataset in root format (theta, phi, E, w)
     '''
     # Check if file exist
     if (not os.path.isfile(filename)):
@@ -34,7 +34,7 @@ def open_training_dataset(filename):
     theta = a[b'Theta']
     phi = a[b'Phi']
     E = a[b'E']
-    w = a[b'w']
+    w = a[b'window']
     data = np.column_stack((theta, phi, E, w))
 
     return data, theta, phi, E, w
@@ -83,9 +83,9 @@ def load_test_dataset(filename):
     # Look for a single key named "ARF (training)"
     k = f.keys()
     try:
-        data = f['ARF (test)']
+        data = f['ARF (testing)']
     except Exception:
-        print("This root file is not a ARF (test), keys are: ", f.keys())
+        print("This root file is not a ARF (testing), keys are: ", f.keys())
         exit()
 
     # Convert to arrays
@@ -97,7 +97,7 @@ def load_test_dataset(filename):
     y = a[b'Y']
     data = np.column_stack((x, y, theta, phi, E))
 
-    return data, x, y, theta, phi, E,
+    return data, x, y, theta, phi, E
 
 
 
