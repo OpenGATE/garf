@@ -16,9 +16,9 @@ from tqdm import tqdm
 
 # -----------------------------------------------------------------------------
 def print_nn_params(params):
-    '''
+    """
     Print parameters of neural network
-    '''
+    """
     for e in params:
         if (e[0] != '#'):
             if (e != 'loss_values'):
@@ -30,15 +30,15 @@ def print_nn_params(params):
 
 # -----------------------------------------------------------------------------
 def nn_prepare_data(x_train, y_train, params):
-    '''
+    """
     Prepare the data fro training: normalisation (mean/std) and add informatino
     in the model_data information structure.
-    '''
+    """
     # itialization
     torch.manual_seed(params['seed'])
 
     # Data normalization
-    print("Data normalization ...")
+    print("Data normalization")
     N = len(x_train)
     x_mean = np.mean(x_train, 0)
     x_std = np.std(x_train, 0)
@@ -63,19 +63,17 @@ def nn_prepare_data(x_train, y_train, params):
 
 # -----------------------------------------------------------------------------
 def nn_init_cuda_type():
-    '''
+    """
     CPU or GPU ?
-    '''
+    """
     # CUDA or not CUDA ?
     gpu_mode = torch.cuda.is_available()
-    #gpu_mode = False
     dtypef = torch.FloatTensor
     dtypei = torch.LongTensor
     if (gpu_mode):
         print('CUDA GPU mode is ON')
         print('CUDA version:', torch.version.cuda)
         print('CUDA current device:', torch.cuda.current_device())
-        # print('CUDA device:', torch.cuda.device(0))
         print('CUDA device counts:', torch.cuda.device_count())
         print('CUDA device name:', torch.cuda.get_device_name(0))
         dtypef = torch.cuda.FloatTensor
@@ -84,32 +82,13 @@ def nn_init_cuda_type():
 
 
 # -----------------------------------------------------------------------------
-class Sampler_nn(Sampler):
-    '''
-    Mini batch sampling strategy with replacement
-    '''
-    def __init__(self, data_source, n_batches, batch_size):
-        self.data_size = len(data_source)
-        self.n_batches = n_batches
-        self.batch_size = batch_size
-
-    def __iter__(self):
-        for i in range(self.n_batches):
-            # random sampling with replacement
-            yield (torch.rand(self.batch_size) * self.data_size).long()
-            #yield (torch.randperm(self.batch_size) * self.data_size).long()
-
-    def __len__(self):
-        return self.n_batches
-
-# -----------------------------------------------------------------------------
 def nn_get_optimiser(model_data, model):
-    '''
+    """
     Create the optimize (Adam + scheduler)
-    '''
+    """
     learning_rate = model_data['learning_rate']
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    # weight_decay=0.000001) ## FIXME
+    # weight_decay=0.000001) ## Test
 
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min',
@@ -120,7 +99,7 @@ def nn_get_optimiser(model_data, model):
 
 # -----------------------------------------------------------------------------
 class Net_v1(nn.Module):
-    '''
+    """
     Define the NN architecture (version 1)
 
     Input:
@@ -133,10 +112,11 @@ class Net_v1(nn.Module):
     - Input X dimension is 3: angle1, angle2, energy
     - Output Y dimension is n_ene_win (one-hot encoding)
     - activation function is ReLu
-    '''
+    """
+
     def __init__(self, H, L, n_ene_win):
         super(Net_v1, self).__init__()
-        self.fc1 = nn.Linear(3, H)         # Linear include Bias=True by default
+        self.fc1 = nn.Linear(3, H) # Linear include Bias=True by default
         self.L = L
         self.fcts = nn.ModuleList()
         for i in range(L):
@@ -144,25 +124,42 @@ class Net_v1(nn.Module):
         self.fc3 = nn.Linear(H, n_ene_win)
 
     def forward(self, X):
-        X = self.fc1(X)            # first layer
-        X = torch.clamp(X, min=0)  # relu
+        X = self.fc1(X) # first layer
+        X = torch.clamp(X, min=0) # relu
         for i in range(self.L):
-            X = self.fcts[i](X)   # hidden layers
-            X = torch.clamp(X, min=0)  # relu
-        X = self.fc3(X)            # output layer
+            X = self.fcts[i](X) # hidden layers
+            X = torch.clamp(X, min=0) # relu
+        X = self.fc3(X) # output layer
         return X
 
 
 # -----------------------------------------------------------------------------
 def train_nn(x_train, y_train, params):
-    '''
-    Train the ARF NN.
-    '''
+    """
+    Train the ARF neural network.
+
+    x_train -- x samples (3 dimensions: theta, phi, E)
+    y_train -- output probabilities vector for N energy windows
+    params  -- dictionary of parameters and options
+
+    params contains:
+    - n_ene_win
+    - batch_size
+    - batch_per_epoch
+    - epoch_store_every
+    - H
+    - L
+    - epoch_max
+    - early_stopping
+    - gpu_mode
+
+    """
+
     # Initialization
     x_train, y_train, model_data, N = nn_prepare_data(x_train, y_train, params)
 
     # One-hot encoding
-    print("One-hot encoding ...")
+    print("One-hot encoding")
     y_vals, y_train = np.unique(y_train, return_inverse=True)
     n_ene_win = len(y_vals)
     print("Number of energy windows:", n_ene_win)
@@ -174,21 +171,18 @@ def train_nn(x_train, y_train, params):
     # CUDA type
     dtypef, dtypei, gpu_mode = nn_init_cuda_type()
 
-    # Pytorch Dataset encapsulation
+    # Pytorch Dataset
     train_data = TensorDataset(torch.from_numpy(x_train).type(dtypef),
                                torch.from_numpy(y_train).type(dtypei))
 
-    # data sampler
-    epoch_size = model_data['batch_epoch_size']
+    # Batch parameters
+    batch_per_epoch = model_data['batch_per_epoch']
     batch_size = model_data['batch_size']
     epoch_store_every = model_data['epoch_store_every']
-    sampler = Sampler_nn(train_data, epoch_size, batch_size)
 
-    # FIXME
-    print('train loader1', batch_size)
-    #train_loader = DataLoader(train_data, batch_sampler=sampler)
-    #train_loader = DataLoader(train_data, batch_sampler=torch.utils.data.sampler.BatchSampler)
-    # print('train loader2')
+    # DataLoader
+    print('Data loader batch_size', batch_size)
+    print('Data loader batch_per_epoch', batch_per_epoch)
     train_data2 = np.column_stack((x_train, y_train))
     train_loader2 = DataLoader(train_data2,
                                batch_size=batch_size,
@@ -196,7 +190,6 @@ def train_nn(x_train, y_train, params):
                                # pin_memory=True,
                                shuffle=True,  ## if false ~20% faster, seems identical
                                drop_last=True)
-    print('done')
 
     # Create the main NN
     H = model_data['H']
@@ -207,14 +200,13 @@ def train_nn(x_train, y_train, params):
     optimizer, scheduler = nn_get_optimiser(model_data, model)
 
     # Main loop initialization
-    n_epochs_max = model_data['n_epochs_max']
+    epoch_max = model_data['epoch_max']
     early_stopping = model_data['early_stopping']
     best_loss = np.Inf
     best_epoch = 0
     best_train_loss = np.Inf
-    percent = n_epochs_max/100.0
-    i = 0
-    loss_values = np.zeros(n_epochs_max+1)
+    percent = epoch_max/100.0
+    loss_values = np.zeros(epoch_max+1)
 
     if (gpu_mode):
         print("Set model cuda ...")
@@ -234,31 +226,20 @@ def train_nn(x_train, y_train, params):
 
     # Main loop
     print('\nStart learning ...')
-    pbar = tqdm(total=n_epochs_max + 1, disable=not params['progress_bar'])
+    pbar = tqdm(total=epoch_max + 1, disable=not params['progress_bar'])
     epoch = 0
     stop = False
-    while (not stop) and (epoch<n_epochs_max): # in range(0, n_epochs_max):
+    while (not stop) and (epoch<epoch_max):
 
-        # ---------------------------
-        ''' Train pass '''
+        # Train pass
         model.train()
         train_loss = 0.
         n_samples_processed = 0
 
-        # batch_idx=0
-        #for X, Y in train_loader:
-            #X, Y = Variable(X).type(dtypef), Variable(Y).type(dtypei)
+        # Loop on the data batch (batch_per_epoch times)
         for batch_idx, data in enumerate(train_loader2):
-            #for batch_idx, data in enumerate(train_loader2):
-            # print('batch_idx', batch_idx)
-            # n_samples_processed = 0
-            # train_loss = 0.
-            # print(epoch)
-            #print('data shape',data.shape)
             x = data[:,0:3]
-            #print('x', x.shape)
             y = data[:,3]
-            #print('y', y.shape)
             X, Y = Variable(x).type(dtypef), Variable(y).type(dtypei)
 
             # Forward pass
@@ -278,24 +259,18 @@ def train_nn(x_train, y_train, params):
             train_loss += loss.data.item() * batch_size
             n_samples_processed += batch_size
 
-            # FIXME
-            # batch_idx = batch_idx + 1
-            if (batch_idx == params['batch_epoch_size']): break
+            # Stop when batch_per_epoch is reach
+            if (batch_idx == params['batch_per_epoch']): break
         # end for loop train_loader
 
 
-        # ---------------------------
-        # print('batch_idx', batch_idx)
         # end of train
-        # print('n_samples_processed', n_samples_processed)
         train_loss /= n_samples_processed
         if train_loss < best_train_loss * (1 - 1e-4):
             best_train_loss = train_loss
         mean_loss = train_loss
 
-        # ---------------------------
-        loss_values[i] = mean_loss       # FIXME remove i variable
-        # print(i)
+        loss_values[epoch] = mean_loss
         if mean_loss < best_loss * (1 - 1e-4):
             best_loss = mean_loss
             best_epoch = epoch
@@ -308,14 +283,9 @@ def train_nn(x_train, y_train, params):
         # scheduler for learning rate
         scheduler.step(mean_loss)
 
-        # print iterations
-        # if (epoch % percent == 0):
-        #tqdm.write('Epoch {} Negative log-likelihood: {:.5f}, {:.5f}, best {:.5f} {:.0f}'.
-        #      format(epoch, train_loss, mean_loss, best_loss, best_epoch))
-
-        # Check if need to store this epoch
+        # Check if need to print and store this epoch
         if (epoch % epoch_store_every == 0 or best_train_loss < previous_best):
-            tqdm.write('Epoch {} <--- store, best is {:.5f} at epoch {:.0f}'.
+            tqdm.write('Epoch {} best is {:.5f} at epoch {:.0f}'.
               format(epoch, best_loss, best_epoch))
             optim_data = dict()
             optim_data['epoch'] = epoch
@@ -328,10 +298,6 @@ def train_nn(x_train, y_train, params):
         # update progress bar
         pbar.update(1)
         epoch = epoch + 1
-        if (epoch > n_epochs_max):
-            stop = True
-            break
-        i = i+1
 
     # end for loop
     print("Training done. Best = {:.5f} at epoch {:.0f}".format(best_loss, best_epoch))
@@ -347,9 +313,9 @@ def train_nn(x_train, y_train, params):
 
 # -----------------------------------------------------------------------------
 def load_nn(filename):
-    '''
+    """
     Load a torch NN model + all associated info
-    '''
+    """
 
     gpu_mode = torch.cuda.is_available()
     gpu_mode = torch.cuda.is_available()
@@ -377,7 +343,7 @@ def load_nn(filename):
 
 # -----------------------------------------------------------------------------
 def build_arf_image_with_nn(nn, model, x, output_filename, param):
-    '''
+    """
     Create the image from ARF simulation data and NN.
     Parameters are:
     - gpu_batch_size
@@ -385,7 +351,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
     - spacing
     - length
     - N (nb of events for scaling)
-    '''
+    """
 
     t1 = time.time()
     print(param)
@@ -509,9 +475,9 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
 
 # -----------------------------------------------------------------------------
 def nn_predict(model, model_data, x):
-    '''
+    """
     Apply the NN to predict y from x
-    '''
+    """
 
     x_mean = model_data['x_mean']
     x_std = model_data['x_std']
@@ -552,9 +518,9 @@ def nn_predict(model, model_data, x):
 
 # -----------------------------------------------------------------------------
 def compute_angle_offset(angles, length):
-    '''
+    """
     compute the x,y offset according to the angle
-    '''
+    """
 
     max_theta = np.max(angles[:, 0])
     min_theta = np.min(angles[:, 0])
@@ -580,11 +546,11 @@ def compute_angle_offset(angles, length):
 
 # -----------------------------------------------------------------------------
 def normalize_logproba(x):
-    '''
+    """
     Convert un-normalized log probabilities to normalized ones (0-100%)
     Not clear how to deal with exp overflow ?
     (https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/)
-    '''
+    """
     exb = np.exp(x)
     exb_sum = np.sum(exb, axis=1)
     # divide if not equal at zero
@@ -599,9 +565,9 @@ def normalize_logproba(x):
 
 # -----------------------------------------------------------------------------
 def normalize_proba_with_russian_roulette(w_pred, channel, rr):
-    '''
+    """
     Consider rr times the values for the energy windows channel
-    '''
+    """
     # multiply column 'channel' by rr
     w_pred[:, channel] *= rr
     # normalize
@@ -616,9 +582,9 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
 
 # -----------------------------------------------------------------------------
 def remove_out_of_image_boundaries(u, v, w_pred, size):
-    '''
+    """
     Remove values out of the images (<0 or > size)
-    '''
+    """
     index = np.where(v < 0)[0]
     index = np.append(index, np.where(u < 0)[0])
     index = np.append(index, np.where(v > size[1]-1)[0])
@@ -632,10 +598,10 @@ def remove_out_of_image_boundaries(u, v, w_pred, size):
 
 # -----------------------------------------------------------------------------
 def image_from_coordinates(img, u, v, w_pred):
-    '''
+    """
     Convert an array of pixel coordinates u,v (int) and corresponding weight
     into an image
-    '''
+    """
 
     # convert to int16
     u = u.astype(np.int16)
