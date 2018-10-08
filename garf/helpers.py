@@ -34,7 +34,10 @@ def load_training_dataset(filename):
     theta = a[b'Theta']
     phi = a[b'Phi']
     E = a[b'E']
-    w = a[b'window']
+    if (b'w' in data.keys()):
+        w = a[b'w']
+    else:
+        w = a[b'window']
     data = np.column_stack((theta, phi, E, w))
 
     return data, theta, phi, E, w

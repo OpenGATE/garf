@@ -73,10 +73,10 @@ def nn_init_cuda_type():
     dtypei = torch.LongTensor
     if (gpu_mode):
         print('CUDA GPU mode is ON')
-        print('CUDA version: ', torch.version.cuda)
-        print('CUDA current device: ', torch.cuda.current_device())
+        print('CUDA version:', torch.version.cuda)
+        print('CUDA current device:', torch.cuda.current_device())
         # print('CUDA device:', torch.cuda.device(0))
-        print('CUDA device counts: ', torch.cuda.device_count())
+        print('CUDA device counts:', torch.cuda.device_count())
         print('CUDA device name:', torch.cuda.get_device_name(0))
         dtypef = torch.cuda.FloatTensor
         dtypei = torch.cuda.LongTensor
@@ -112,7 +112,8 @@ def nn_get_optimiser(model_data, model):
     # weight_decay=0.000001) ## FIXME
 
     # decreasing learning_rate
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, patience=50)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min',
+                                                           verbose=False, patience=50)
 
     return optimizer, scheduler
 
@@ -184,14 +185,11 @@ def train_nn(x_train, y_train, params):
     sampler = Sampler_nn(train_data, epoch_size, batch_size)
 
     # FIXME
-    print('train loader1')
+    print('train loader1', batch_size)
     #train_loader = DataLoader(train_data, batch_sampler=sampler)
     #train_loader = DataLoader(train_data, batch_sampler=torch.utils.data.sampler.BatchSampler)
     # print('train loader2')
-    print(x_train.shape)
-    print(y_train.shape)
     train_data2 = np.column_stack((x_train, y_train))
-    print(train_data2.shape)
     train_loader2 = DataLoader(train_data2,
                                batch_size=batch_size,
                                num_workers=1,
@@ -216,7 +214,7 @@ def train_nn(x_train, y_train, params):
     best_train_loss = np.Inf
     percent = n_epochs_max/100.0
     i = 0
-    loss_values = np.zeros(n_epochs_max)
+    loss_values = np.zeros(n_epochs_max+1)
 
     if (gpu_mode):
         print("Set model cuda ...")
@@ -237,18 +235,25 @@ def train_nn(x_train, y_train, params):
     # Main loop
     print('\nStart learning ...')
     pbar = tqdm(total=n_epochs_max + 1, disable=not params['progress_bar'])
-    for epoch in range(1, n_epochs_max + 1):
+    epoch = 0
+    stop = False
+    while (not stop) and (epoch<n_epochs_max): # in range(0, n_epochs_max):
 
         # ---------------------------
         ''' Train pass '''
         model.train()
         train_loss = 0.
         n_samples_processed = 0
+
+        # batch_idx=0
         #for X, Y in train_loader:
-        #    X, Y = Variable(X).type(dtypef), Variable(Y).type(dtypei)
+            #X, Y = Variable(X).type(dtypef), Variable(Y).type(dtypei)
         for batch_idx, data in enumerate(train_loader2):
-            #print('batch_idx', batch_idx)
-            #print(data)
+            #for batch_idx, data in enumerate(train_loader2):
+            # print('batch_idx', batch_idx)
+            # n_samples_processed = 0
+            # train_loss = 0.
+            # print(epoch)
             #print('data shape',data.shape)
             x = data[:,0:3]
             #print('x', x.shape)
@@ -272,24 +277,32 @@ def train_nn(x_train, y_train, params):
             batch_size = X.shape[0]  # important with variable batch sizes
             train_loss += loss.data.item() * batch_size
             n_samples_processed += batch_size
-            # end for loop train_loader
+
+            # FIXME
+            # batch_idx = batch_idx + 1
+            if (batch_idx == params['batch_epoch_size']): break
+        # end for loop train_loader
+
 
         # ---------------------------
+        # print('batch_idx', batch_idx)
         # end of train
+        # print('n_samples_processed', n_samples_processed)
         train_loss /= n_samples_processed
         if train_loss < best_train_loss * (1 - 1e-4):
             best_train_loss = train_loss
         mean_loss = train_loss
 
         # ---------------------------
-        loss_values[i] = mean_loss
-        i = i+1
+        loss_values[i] = mean_loss       # FIXME remove i variable
+        # print(i)
         if mean_loss < best_loss * (1 - 1e-4):
             best_loss = mean_loss
             best_epoch = epoch
         elif epoch - best_epoch > early_stopping:
             tqdm.write('{} epochs without improvement, early stop.'
                   .format(early_stopping))
+            stop = True
             break
 
         # scheduler for learning rate
@@ -297,11 +310,13 @@ def train_nn(x_train, y_train, params):
 
         # print iterations
         # if (epoch % percent == 0):
-        tqdm.write('Epoch {} Negative log-likelihood: {:.5f}, {:.5f}, best {:.5f} {:.0f}'.
-              format(epoch, train_loss, mean_loss, best_loss, best_epoch))
+        #tqdm.write('Epoch {} Negative log-likelihood: {:.5f}, {:.5f}, best {:.5f} {:.0f}'.
+        #      format(epoch, train_loss, mean_loss, best_loss, best_epoch))
 
         # Check if need to store this epoch
         if (epoch % epoch_store_every == 0 or best_train_loss < previous_best):
+            tqdm.write('Epoch {} <--- store, best is {:.5f} at epoch {:.0f}'.
+              format(epoch, best_loss, best_epoch))
             optim_data = dict()
             optim_data['epoch'] = epoch
             optim_data['train_loss'] = train_loss
@@ -312,9 +327,14 @@ def train_nn(x_train, y_train, params):
 
         # update progress bar
         pbar.update(1)
+        epoch = epoch + 1
+        if (epoch > n_epochs_max):
+            stop = True
+            break
+        i = i+1
 
     # end for loop
-    print("Training done. Best = ", best_loss, best_epoch)
+    print("Training done. Best = {:.5f} at epoch {:.0f}".format(best_loss, best_epoch))
 
     # prepare data to be save
     model_data['loss_values'] = loss_values
