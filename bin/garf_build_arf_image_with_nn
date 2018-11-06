@@ -55,9 +55,11 @@ def garf_build_arf_image_with_nn(data_root,
     '''
     \b
     Build spect image from ARF data.root with the given NN.
+
     <DATA_ROOT> : ARF root data from the simulation
-    <N>         : number of particles used to create the dataset
-    <NN_PTH>    : NN
+    <N>         : number of particles used to create the arf dataset
+    <NN_PTH>    : filename of the neural network (.pth)
+
     '''
     data_filename = data_root
     model_filename = nn_pth

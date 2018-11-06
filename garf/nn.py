@@ -223,6 +223,7 @@ def train_nn(x_train, y_train, params):
     nn['optim']['model_state'] = []
     nn['optim']['data'] = []
     previous_best = 9999
+    best_epoch_index = 0
 
     # Main loop
     print('\nStart learning ...')
@@ -283,17 +284,20 @@ def train_nn(x_train, y_train, params):
         # scheduler for learning rate
         scheduler.step(mean_loss)
 
+        # FIXME WRONG
         # Check if need to print and store this epoch
         if (epoch % epoch_store_every == 0 or best_train_loss < previous_best):
             tqdm.write('Epoch {} best is {:.5f} at epoch {:.0f}'.
-              format(epoch, best_loss, best_epoch))
+                       format(epoch, best_loss, best_epoch))
             optim_data = dict()
             optim_data['epoch'] = epoch
             optim_data['train_loss'] = train_loss
             state = copy.deepcopy(model.state_dict())
             nn['optim']['model_state'].append(state)
             nn['optim']['data'].append(optim_data)
-            previous_best = best_train_loss
+            if best_train_loss < previous_best:
+                best_epoch_index = len(nn['optim']['model_state'])-1
+                previous_best = best_train_loss
 
         # update progress bar
         pbar.update(1)
@@ -306,6 +310,7 @@ def train_nn(x_train, y_train, params):
     model_data['loss_values'] = loss_values
     model_data['final_epoch'] = epoch
     model_data['best_epoch'] = best_epoch
+    model_data['best_epoch_index'] = best_epoch_index
     model_data['best_loss'] = best_loss
 
     return nn
@@ -326,13 +331,29 @@ def load_nn(filename):
         print('Loading model *without* GPU')
         nn = torch.load(filename, map_location=lambda storage, loc: storage)
     model_data = nn['model_data']
-    if (not 'min_optim_eval' in model_data):
-        min_optim_eval = len(nn['optim']['data'])-1
-        print("(Warning no min_optim_eval, using the last one)")
+
+    # FIXME
+    print('nb stored ', len(nn['optim']['data']))
+    for d in nn['optim']['data']:
+        print(d['epoch'], d['train_loss'])
+
+    if not 'best_epoch_eval' in model_data:
+        best_epoch_eval = len(nn['optim']['data'])-1
     else:
-        min_optim_eval = model_data['min_optim_eval']
-    print('(min_optim_eval = {})'.format(min_optim_eval))
-    state = nn['optim']['model_state'][min_optim_eval]
+        best_epoch_eval = model_data['best_epoch_index']
+
+    # print('index, ', best_epoch_eval)
+
+    # the best epoch is always the last stored
+    # if (not 'best_epoch_eval' in model_data):
+    #     best_epoch_eval = len(nn['optim']['data'])-1
+    #     # print("(Warning no best_epoch_eval, using the last one)")
+    # else:
+    #     best_epoch_eval = model_data['best_epoch_eval']
+    # best_epoch_eval = model_data['best_epoch_index']
+    print('Index of best epoch = {}'.format(best_epoch_eval))
+    print('Best epoch = {}'.format(nn['optim']['data'][best_epoch_eval]['epoch']))
+    state = nn['optim']['model_state'][best_epoch_eval]
     H = model_data['H']
     n_ene_win = model_data['n_ene_win']
     L = model_data['L']
@@ -531,11 +552,7 @@ def compute_angle_offset(angles, length):
 
     angles_rad = np.deg2rad(angles)
     cos_theta = np.cos(angles_rad[:, 0])
-    # sin_theta = np.sin(angles_rad[:, 0])
     cos_phi = np.cos(angles_rad[:, 1])
-    # sin_phi = np.sin(angles_rad[:, 1])
-    # tan_theta = np.tan(angles_rad[:, 0])
-    # tan_phi = np.tan(angles_rad[:, 1])
 
     tx = length * cos_phi
     ty = length * cos_theta
@@ -576,7 +593,6 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
     # check
     # p_sum = np.sum(w_pred, axis=1)
     # print(p_sum)
-
     return w_pred
 
 

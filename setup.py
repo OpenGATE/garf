@@ -19,6 +19,8 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ),
     scripts=[
+        'bin/garf_compare_image_profile',
+        'bin/garf_scale_and_Poisson_noise',
         'bin/garf_plot_training_dataset',
         'bin/garf_plot_test_dataset',
         'bin/garf_train',
