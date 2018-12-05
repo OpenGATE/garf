@@ -38,9 +38,14 @@ def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
     data_ref = sitk.GetArrayFromImage(img_ref).astype(float)
     data = sitk.GetArrayFromImage(img).astype(float)
 
+    # Sometimes not same nb of slices -> crop the data_ref
+    if len(data_ref) > len(data):
+        data_ref = data_ref[0:len(data),:,:]
+
     # Criterion1: global counts in every windows
     s_ref = np.sum(data_ref, axis=(1, 2))
     s = np.sum(data, axis=(1, 2))
+
     print("Ref:     Singles/Scatter/Peak1/Peak2: {}".format(s_ref))
     print("Img:     WARNING/Scatter/Peak1/Peak2: {}".format(s))
     print("% diff : WARNING/Scatter/Peak1/Peak2: {}".format((s-s_ref)/s_ref*100.0))
@@ -52,6 +57,7 @@ def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
     x = np.arange(0, 128, 1)
 
     nb_ene = len(data)
+    print(nb_ene)
     if (nb_ene == 6):
         win = ['WARNING', 'Scatter1', 'Peak171', 'Scatter2', 'Scatter3', 'Peak245']
     else:
