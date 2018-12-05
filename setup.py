@@ -5,7 +5,7 @@ with open("readme.md", "r") as fh:
 
 setuptools.setup(
     name="garf",
-    version="0.0.1",
+    version="0.0.2",
     author="David Sarrut",
     author_email="david.sarrut@creatis.insa-lyon.fr",
     description="Utility tools for GATE ARF simulations",
@@ -25,5 +25,6 @@ setuptools.setup(
         'bin/garf_plot_test_dataset',
         'bin/garf_train',
         'bin/garf_nn_info',
-        'bin/garf_build_arf_image_with_nn']
+        'bin/garf_build_arf_image_with_nn',
+        'bin/garf_merge_images']
 )

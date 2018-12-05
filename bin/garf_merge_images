@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import click
+import os
+import SimpleITK as sitk
+import numpy as np
+#rom garf_scale_and_Poisson_noise import garf_scale_and_Poisson_noise
+#mport garf_scale_and_Poisson_noise
+
+# -----------------------------------------------------------------------------
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+@click.command(context_settings=CONTEXT_SETTINGS)
+@click.argument('output_mhd')
+@click.argument('files', nargs=-1)
+
+# -----------------------------------------------------------------------------
+def garf_merge_images(output_mhd, files):
+    '''
+    \b
+    Merge images (rotation) into a single image + apply noise and scale
+
+    <DATA_ROOT> : ARF root data from the simulation
+    <N>         : number of particles used to create the arf dataset
+    <NN_PTH>    : filename of the neural network (.pth)
+
+    '''
+
+    images = []
+    for filename in files:
+        im = sitk.ReadImage(filename)
+        img = sitk.GetArrayFromImage(im)
+        images.append(img)
+
+    nb_ene_win = len(images[0])
+    print('files = {}, nb ene win = {}'.format(len(images), nb_ene_win))
+
+    sz, sx, sy = images[0].shape
+    sz = sz * len(images)
+    output = np.zeros((sz,sx,sy))
+    i = 0
+    for img in images:
+        for e in range(nb_ene_win):
+            index = len(images)*e+i
+            #print(i, e, index, img[0].shape)
+            output[index] = img[e]
+        #print('-----')
+        i = i+1
+
+    output = sitk.GetImageFromArray(output)
+    output.SetOrigin(im.GetOrigin())
+    output.SetSpacing(im.GetSpacing())
+    output.SetDirection(im.GetDirection())
+    sitk.WriteImage(output, output_mhd)
+
+
+# -----------------------------------------------------------------------------
+if __name__ == '__main__':
+    garf_merge_images()
