@@ -38,6 +38,9 @@ def garf_scale_and_Poisson_noise(image_mhd, events, output_mhd):
     # compute final data
     data = (data-std_data*events)*events
 
+    # remove negative values
+    data[data<0] = 0
+
     # add noise
     noise = np.random.poisson(data, data.shape)
     noise = noise.astype(float)
@@ -48,6 +51,7 @@ def garf_scale_and_Poisson_noise(image_mhd, events, output_mhd):
     print("Write image to ", output_mhd)
     noise_img = sitk.GetImageFromArray(noise)
     noise_img.CopyInformation(img)
+    noise_img = sitk.Cast(noise_img, sitk.sitkFloat32)
     sitk.WriteImage(noise_img, output_mhd)
 
 
