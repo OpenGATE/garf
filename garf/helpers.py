@@ -103,4 +103,75 @@ def load_test_dataset(filename):
     return data, x, y, theta, phi, E
 
 
+# -----------------------------------------------------------------------------
+def image_uncertainty_arf(data, sq_data, N, threshold):
+    '''
+    Compute image uncertainty for ARF image
+    '''
 
+    uncert = np.copy(data)
+    uncert.fill(0.0)
+    s_sigma = np.zeros(len(data))
+    slice_i = 0
+    while slice_i < len(data):
+        # get slice for the ith energy windows
+        d = data[slice_i]
+        sq_d = sq_data[slice_i]
+
+        # Chetty2007 p 4832 history by history
+        a = np.divide(sq_d, N)
+        b = np.square(np.divide(d,N))
+        m = (a-b)
+        m = m/(N-1)
+        sm = np.sqrt(m)
+
+        # number of counts (per N)
+        dn = np.divide(d, N)
+
+        # normalisation by the nb of counts dn
+        sigma = np.divide(sm, dn, out=np.zeros_like(dn), where=d > threshold)
+
+        uncert[slice_i] = sigma
+
+        # compute the mean over all pixels with more than threshold counts
+        n = np.where(d > threshold)
+        n = len(n[0])
+        sum_sigma = np.sum(sigma)
+        if sum_sigma:
+            mean_sigma = sum_sigma/n
+        else:
+            mean_sigma = 1
+
+        s_sigma[slice_i] = mean_sigma
+        slice_i = slice_i + 1
+
+    return s_sigma, uncert
+
+
+# -----------------------------------------------------------------------------
+def image_uncertainty_analog(data, threshold):
+    '''
+    Compute image uncertainty for image computed with analog MC
+    '''
+
+    uncert = np.copy(data)
+    uncert.fill(0.0)
+    s_sigma = np.zeros(len(data))
+    slice_i = 0
+
+    # loop
+    while slice_i < len(data):
+        d = data[slice_i]
+        # sqrt of the variance (var is equal to the value itself)
+        sigma = np.sqrt(d)
+        sigma_n = np.divide(sigma, d, out=np.zeros_like(d), where=d > threshold)
+        uncert[slice_i] = sigma_n
+        sum_sigma = np.sum(sigma_n)
+        n_sigma = np.where(d > threshold)
+        n_sigma = len(n_sigma[0])
+        mean_sigma = sum_sigma/n_sigma
+        # end
+        s_sigma[slice_i] = mean_sigma
+        slice_i = slice_i + 1
+
+    return s_sigma, uncert

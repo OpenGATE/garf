@@ -26,5 +26,7 @@ setuptools.setup(
         'bin/garf_train',
         'bin/garf_nn_info',
         'bin/garf_build_arf_image_with_nn',
-        'bin/garf_merge_images']
+        'bin/garf_merge_images',
+        'bin/garf_uncertainty_arf',
+        'bin/garf_uncertainty_analog']
 )

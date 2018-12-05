@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import garf
+import click
+import SimpleITK as sitk
+import numpy as np
+
+# -----------------------------------------------------------------------------
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+@click.command(context_settings=CONTEXT_SETTINGS)
+@click.argument('image_mhd')
+@click.option('--output', '-o',
+              help='If set, write uncertainty image.')
+@click.option('--threshold', '-t',
+              default=0.0,
+              help='Threshold in %, do not consider pixel with value lower than this % of the max value')
+# -----------------------------------------------------------------------------
+def ganalog_uncertainty_analog(image_mhd, output, threshold):
+    '''
+    \b
+    Compute uncertainty for ANALOG result
+
+    IMAGE_MHD : image from analog MC simulation
+    '''
+
+    filename = image_mhd
+    img = sitk.ReadImage(filename)
+
+    # get data in np (convert int to float)
+    data = sitk.GetArrayFromImage(img).astype(float)
+    n_ene_win = len(data)-1
+
+    uncert = np.copy(data)
+    uncert.fill(0.0)
+
+    dmax = np.max(data)
+    threshold = threshold*dmax
+
+    # loop
+    sigma, uncert = garf.image_uncertainty_analog(data, threshold)
+
+    for i in range(len(sigma)):
+        n = np.count_nonzero(uncert[i])
+        print("Channel {0} uncertainty = {1:.2f} % nb pixels = {2}".format(i, sigma[i]*100.0, n))
+
+    # output
+    if output:
+        img_uncert = sitk.GetImageFromArray(uncert)
+        img_uncert.CopyInformation(img)
+        img_uncert = sitk.Cast(img_uncert, sitk.sitkFloat32)
+        sitk.WriteImage(img_uncert, output)
+
+
+# -----------------------------------------------------------------------------
+if __name__ == '__main__':
+    ganalog_uncertainty_analog()
