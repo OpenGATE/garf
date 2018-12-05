@@ -363,7 +363,7 @@ def load_nn(filename):
 
 
 # -----------------------------------------------------------------------------
-def build_arf_image_with_nn(nn, model, x, output_filename, param):
+def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     """
     Create the image from ARF simulation data and NN.
     Parameters are:
@@ -375,7 +375,8 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
     """
 
     t1 = time.time()
-    print(param)
+    if verbose:
+        print(param)
 
     # Get mean/std from the NN
     model_data = nn['model_data']
@@ -389,8 +390,9 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
     N_detected = len(x)
     N_dataset = float(param['N_dataset'])
     N_scale = float(param['N_scale'])
-    print("Nb of events:          ", N_dataset)
-    print("Nb of detected events: ", N_detected)
+    if verbose:
+        print("Nb of events:          ", N_dataset)
+        print("Nb of detected events: ", N_detected)
 
     # get the two angles and the energy
     ax = x[:, 2:5]
@@ -410,7 +412,8 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
         else:
             w_pred = np.vstack((w_pred, w))
         start_index = end
-        print("Generating counts: {}/{} ...".format(end, N_detected))
+        if verbose:
+            print("Generating counts: {}/{} ...".format(end, N_detected))
         i = i+1
 
     nb_ene = len(w_pred[0])
@@ -425,9 +428,10 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
     # collimator+ half crystal length in mm
     coll_l = param['length']
 
-    print('Image size', size)
-    print('Image spacing ', spacing)
-    print('Image detector length ', coll_l)
+    if verbose:
+        print('Image size', size)
+        print('Image spacing ', spacing)
+        print('Image detector length ', coll_l)
 
     # -----------------------------------------------------------------------------
     # Get the two first columns = coordinates
@@ -441,7 +445,8 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
     # -----------------------------------------------------------------------------
     # Take angle into account: consider position at collimator + half crystal
     # length
-    print("Compute image positions ...")
+    if verbose:
+        print("Compute image positions ...")
     angles = x[:, 2:4]
     t = compute_angle_offset(angles, coll_l)
     cx = cx + t
@@ -464,25 +469,30 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
 
     # -----------------------------------------------------------------------------
     # convert array of coordinates to img
-    print("Channel 0 in the output image is set to zero, it CANNOT be compared to reference data")
-    print("Compute image ", size, spacing, "...")
+    if verbose:
+        print("Channel 0 in the output image is set to zero, it CANNOT be compared to reference data")
+        print("Compute image ", size, spacing, "...")
     data_img = image_from_coordinates(data_img, u, v, w_pred)
 
     # -----------------------------------------------------------------------------
     # write final image
-    print("Write image to ", output_filename)
+    if verbose:
+        print("Write image to ", output_filename)
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
     img = sitk.GetImageFromArray(data_img)
     origin = np.divide(spacing, 2.0)
     img.SetSpacing(spacing)
     img.SetOrigin(origin)
+    img = sitk.Cast(img, sitk.sitkFloat32)
     sitk.WriteImage(img, output_filename)
-    print("Computation time: {0:.3f} sec".format(time.time()-t1))
+    if verbose:
+        print("Computation time: {0:.3f} sec".format(time.time()-t1))
 
     # -----------------------------------------------------------------------------
     # also output the squared value
-    print("Compute squared values ...")
+    if verbose:
+        print("Compute squared values ...")
     w_pred = np.square(w_pred)
     data_img = image_from_coordinates(data_img, u, v, w_pred)
     data_img = data_img/(N_dataset**2)*(N_scale**2)
@@ -490,7 +500,9 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param):
     sq_img.CopyInformation(img)
 
     output_filename = output_filename.replace(".mhd", "_squared.mhd")
-    print("Write image to ", output_filename)
+    if verbose:
+        print("Write image to ", output_filename)
+    sq_img = sitk.Cast(sq_img, sitk.sitkFloat32)
     sitk.WriteImage(sq_img, output_filename)
 
 
@@ -547,8 +559,8 @@ def compute_angle_offset(angles, length):
     min_theta = np.min(angles[:, 0])
     max_phi = np.max(angles[:, 1])
     min_phi = np.min(angles[:, 1])
-    print("min max theta {} {}".format(min_theta, max_theta))
-    print("min max phi {} {}".format(min_phi, max_phi))
+    #print("min max theta {} {}".format(min_theta, max_theta))
+    #print("min max phi {} {}".format(min_phi, max_phi))
 
     angles_rad = np.deg2rad(angles)
     cos_theta = np.cos(angles_rad[:, 0])
@@ -608,7 +620,7 @@ def remove_out_of_image_boundaries(u, v, w_pred, size):
     v = np.delete(v, index)
     u = np.delete(u, index)
     w_pred = np.delete(w_pred, index, axis=0)
-    print('Remove points out of the image: {} values removed'.format(len(index)))
+    # print('Remove points out of the image: {} values removed'.format(len(index)))
     return u, v, w_pred
 
 
@@ -661,3 +673,4 @@ def image_from_coordinates(img, u, v, w_pred):
 
     # end
     return img
+
