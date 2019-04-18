@@ -34,9 +34,6 @@ def ganalog_uncertainty_analog(image_mhd, output, threshold):
     uncert = np.copy(data)
     uncert.fill(0.0)
 
-    dmax = np.max(data)
-    threshold = threshold*dmax
-
     # loop
     sigma, uncert = garf.image_uncertainty_analog(data, threshold)
 

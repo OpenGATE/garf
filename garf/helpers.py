@@ -107,6 +107,7 @@ def load_test_dataset(filename):
 def image_uncertainty_arf(data, sq_data, N, threshold):
     '''
     Compute image uncertainty for ARF image
+    threshold as a % of the max
     '''
 
     uncert = np.copy(data)
@@ -129,7 +130,8 @@ def image_uncertainty_arf(data, sq_data, N, threshold):
         dn = np.divide(d, N)
 
         # normalisation by the nb of counts dn
-        sigma = np.divide(sm, dn, out=np.zeros_like(dn), where=d > threshold)
+        t = np.max(d)*threshold
+        sigma = np.divide(sm, dn, out=np.zeros_like(dn), where=d > t)
 
         uncert[slice_i] = sigma
 
@@ -152,6 +154,7 @@ def image_uncertainty_arf(data, sq_data, N, threshold):
 def image_uncertainty_analog(data, threshold):
     '''
     Compute image uncertainty for image computed with analog MC
+    threshold as a % of the max
     '''
 
     uncert = np.copy(data)
@@ -164,7 +167,8 @@ def image_uncertainty_analog(data, threshold):
         d = data[slice_i]
         # sqrt of the variance (var is equal to the value itself)
         sigma = np.sqrt(d)
-        sigma_n = np.divide(sigma, d, out=np.zeros_like(d), where=d > threshold)
+        t = np.max(d)*threshold
+        sigma_n = np.divide(sigma, d, out=np.zeros_like(d), where=d > t)
         uncert[slice_i] = sigma_n
         sum_sigma = np.sum(sigma_n)
         n_sigma = np.where(d > threshold)
