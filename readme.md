@@ -1,8 +1,9 @@
 
 GARF = GATE ARF 
 
-Scripts associated with the publication:
- 
+```pip install garf```
+
+Scripts associated with the publication: 
 Phys Med Biol. 2018 Oct 17;63(20):205013. doi: 10.1088/1361-6560/aae331.
 Learning SPECT detector angular response function with neural network for accelerating Monte-Carlo simulations.
 Sarrut D, Krah N, Badel JN, Létang JM.
