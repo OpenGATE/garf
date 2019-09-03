@@ -136,7 +136,8 @@ def image_uncertainty_arf(data, sq_data, N, threshold):
         uncert[slice_i] = sigma
 
         # compute the mean over all pixels with more than threshold counts
-        n = np.where(d > threshold)
+        #n = np.where(d > threshold)
+        n = np.where(d > t)
         n = len(n[0])
         sum_sigma = np.sum(sigma)
         if sum_sigma:
@@ -171,7 +172,8 @@ def image_uncertainty_analog(data, threshold):
         sigma_n = np.divide(sigma, d, out=np.zeros_like(d), where=d > t)
         uncert[slice_i] = sigma_n
         sum_sigma = np.sum(sigma_n)
-        n_sigma = np.where(d > threshold)
+        #n_sigma = np.where(d > threshold) ## BUG !!
+        n_sigma = np.where(d > t)
         n_sigma = len(n_sigma[0])
         mean_sigma = sum_sigma/n_sigma
         # end

@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import torch
+import click
+
+# -----------------------------------------------------------------------------
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+@click.command(context_settings=CONTEXT_SETTINGS)
+def pytorch_info():
+    '''
+    \b
+    Print pytorch version
+    '''
+
+    gpu_mode = torch.cuda.is_available()
+    print('pytorch version',torch.__version__)
+    if (gpu_mode):
+        print('CUDA GPU mode is ON')
+        print('CUDA version:', torch.version.cuda)
+        print('CUDA current device:', torch.cuda.current_device())
+        print('CUDA device counts:', torch.cuda.device_count())
+        print('CUDA device name:', torch.cuda.get_device_name(0))
+    else:
+        print('No CUDA, no GPU mode')
+
+# -----------------------------------------------------------------------------
+if __name__ == '__main__':
+    pytorch_info()

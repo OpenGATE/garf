@@ -61,8 +61,8 @@ def garf_build_arf_image_with_nn(data_root,
     \b
     Build spect image from ARF data.root with the given NN.
 
-    <DATA_ROOT> : ARF root data from the simulation
-    <N>         : number of particles used to create the arf dataset
+    <DATA_ROOT> : ARF root data from the simulation\n
+    <N>         : number of particles used to create the arf dataset\n
     <NN_PTH>    : filename of the neural network (.pth)
 
     '''
@@ -96,9 +96,9 @@ def garf_build_arf_image_with_nn(data_root,
         for root, dirs, files in os.walk(data_root):
             files.sort()
             for name in files:
-                if name.startswith(('arf_')):
+                if name.startswith(('arf')):
                     arf_files.append(name)
-                if name.startswith(('stats_')):
+                if name.startswith(('stats')):
                     stat_files.append(name)
         pattern = '# NumberOfEvents = '
         l = len(pattern)
