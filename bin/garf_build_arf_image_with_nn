@@ -42,7 +42,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
               default=99,
               help='Collimator length + half crystal length in mm (def = 99 mm).')
 
-@click.option('--events', '-n',
+@click.option('--events', '-e',
               default=float(1),
               help='Scale the image for N primary events (def = 1).')
 

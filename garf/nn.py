@@ -317,25 +317,31 @@ def train_nn(x_train, y_train, params):
 
 
 # -----------------------------------------------------------------------------
-def load_nn(filename):
+def load_nn(filename, gpu='auto', verbose=True):
     """
     Load a torch NN model + all associated info
     """
 
-    gpu_mode = torch.cuda.is_available()
-    gpu_mode = torch.cuda.is_available()
+    if gpu == 'auto':
+        gpu_mode = torch.cuda.is_available()
+    else:
+        if not gpu:
+            gpu_mode = False
+        else:
+            gpu_mode = True
+        
     if (gpu_mode):
-        print('Loading model with GPU')
+        print('Loading model {} with GPU'.format(filename))
         nn = torch.load(filename)
     else:
-        print('Loading model *without* GPU')
+        print('Loading model {} *without* GPU'.format(filename))
         nn = torch.load(filename, map_location=lambda storage, loc: storage)
     model_data = nn['model_data']
 
     # FIXME
-    print('nb stored ', len(nn['optim']['data']))
+    verbose and print('nb stored ', len(nn['optim']['data']))
     for d in nn['optim']['data']:
-        print(d['epoch'], d['train_loss'])
+        verbose and print(d['epoch'], d['train_loss'])
 
     if not 'best_epoch_eval' in model_data:
         best_epoch_eval = len(nn['optim']['data'])-1
@@ -351,8 +357,8 @@ def load_nn(filename):
     # else:
     #     best_epoch_eval = model_data['best_epoch_eval']
     # best_epoch_eval = model_data['best_epoch_index']
-    print('Index of best epoch = {}'.format(best_epoch_eval))
-    print('Best epoch = {}'.format(nn['optim']['data'][best_epoch_eval]['epoch']))
+    verbose and print('Index of best epoch = {}'.format(best_epoch_eval))
+    verbose and print('Best epoch = {}'.format(nn['optim']['data'][best_epoch_eval]['epoch']))
     state = nn['optim']['model_state'][best_epoch_eval]
     H = model_data['H']
     n_ene_win = model_data['n_ene_win']
@@ -383,6 +389,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     x_mean = model_data['x_mean']
     x_std = model_data['x_std']
     rr = model_data['RR']
+    print('rr',rr)
 
     #print(model_data)
 
@@ -499,7 +506,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     sq_img = sitk.GetImageFromArray(data_img)
     sq_img.CopyInformation(img)
 
-    output_filename = output_filename.replace(".mhd", "_squared.mhd")
+    output_filename = output_filename.replace(".mhd", "-Squared.mhd")
     if verbose:
         print("Write image to ", output_filename)
     sq_img = sitk.Cast(sq_img, sitk.sitkFloat32)

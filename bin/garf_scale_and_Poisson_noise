@@ -18,11 +18,12 @@ def garf_scale_and_Poisson_noise(image_mhd, events, output_mhd):
 
     # load image and squared image
     img = sitk.ReadImage(image_mhd)
-    sq_filename = image_mhd.replace(".mhd", "_squared.mhd")
+    sq_filename = image_mhd.replace(".mhd", "-Squared.mhd")
     sq_img = sitk.ReadImage(sq_filename)
 
     # ensure that events is in float
     events = float(events)
+    print('events', events);
 
     # get data in np
     data = sitk.GetArrayFromImage(img)
@@ -36,7 +37,8 @@ def garf_scale_and_Poisson_noise(image_mhd, events, output_mhd):
     np.nan_to_num(std_data, 0)
 
     # compute final data
-    data = (data-std_data*events)*events
+    data = (data-std_data*events)*events  #FIXME
+    #data = data*events
 
     # remove negative values
     data[data<0] = 0
@@ -50,6 +52,16 @@ def garf_scale_and_Poisson_noise(image_mhd, events, output_mhd):
     # write final image
     print("Write image to ", output_mhd)
     noise_img = sitk.GetImageFromArray(noise)
+    noise_img.CopyInformation(img)
+    noise_img = sitk.Cast(noise_img, sitk.sitkFloat32)
+    sitk.WriteImage(noise_img, output_mhd)
+
+    # write final squared image
+    output_mhd = output_mhd.replace(".mhd", "-Squared.mhd")
+    print("Write sq image to ", output_mhd)
+    N = events
+    s = sq_data*N*N
+    noise_img = sitk.GetImageFromArray(s)
     noise_img.CopyInformation(img)
     noise_img = sitk.Cast(noise_img, sitk.sitkFloat32)
     sitk.WriteImage(noise_img, output_mhd)

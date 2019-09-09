@@ -23,6 +23,7 @@ setuptools.setup(
         'bin/garf_scale_and_Poisson_noise',
         'bin/garf_plot_training_dataset',
         'bin/garf_plot_test_dataset',
+        'bin/garf_convert_pth_to_pt',
         'bin/garf_train',
         'bin/garf_nn_info',
         'bin/garf_build_arf_image_with_nn',

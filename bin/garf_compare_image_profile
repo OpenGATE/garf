@@ -57,10 +57,18 @@ def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
     x = np.arange(0, 128, 1)
 
     nb_ene = len(data)
-    print(nb_ene)
-    if (nb_ene == 6):
+    print('Nb of energy windows: ',nb_ene)
+
+    if (nb_ene == 3): # Tc99m
+        win = ['WARNING', 'Scatter', 'Peak 140']
+        
+    if (nb_ene == 6): # In111
         win = ['WARNING', 'Scatter1', 'Peak171', 'Scatter2', 'Scatter3', 'Peak245']
-    else:
+        
+    if (nb_ene == 7): # Lu177
+        win = ['WARNING', 'Scatter1', 'Peak113', 'Scatter2', 'Scatter3', 'Peak208', 'Scatter4']
+        
+    if (nb_ene == 8):
         win = ['WARNING', 'Scatter1', 'Peak364', 'Scatter2', 'Scatter3',
                'Scatter4', 'Peak637', 'Peak722']
 
@@ -89,6 +97,7 @@ def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
     plt.suptitle('Compare '+image1_mhd+' vs '+image2_mhd+' w='+str(wslice))
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
+    plt.savefig('output.pdf')
     plt.show()
 
 
