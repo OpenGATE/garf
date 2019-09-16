@@ -28,7 +28,5 @@ setuptools.setup(
         'bin/garf_nn_info',
         'bin/garf_build_arf_image_with_nn',
         'bin/garf_merge_images',
-        'bin/garf_uncertainty_arf',
         'bin/pytorch_info',
-        'bin/garf_uncertainty_analog']
 )
