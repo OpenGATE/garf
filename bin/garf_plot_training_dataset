@@ -15,7 +15,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.argument('data')
 @click.option('--rr',
-              default=int(40),
+              required=True, 
               help='Russian Roulette used during simulation')
 
 def garf_plot_training_dataset(data, rr):
