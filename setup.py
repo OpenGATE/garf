@@ -20,7 +20,7 @@ setuptools.setup(
     ),
     scripts=[
         'bin/garf_compare_image_profile',
-        'bin/garf_scale_and_Poisson_noise',
+        'bin/garf_scale',
         'bin/garf_plot_training_dataset',
         'bin/garf_plot_test_dataset',
         'bin/garf_convert_pth_to_pt',
