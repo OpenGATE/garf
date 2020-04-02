@@ -86,7 +86,7 @@ def load_test_dataset(filename):
     # Look for a single key named "ARF (training)"
     k = f.keys()
     try:
-        data = f['ARF (testing)']
+        data = f['ARF (using)']
     except Exception:
         print("This root file is not a ARF (testing), keys are: ", f.keys())
         exit()
@@ -98,7 +98,13 @@ def load_test_dataset(filename):
     E = a[b'E']
     x = a[b'X']
     y = a[b'Y']
-    data = np.column_stack((x, y, theta, phi, E))
+    debug = True
+    if debug: # FIXME DEBUG 
+        evid = a[b'eventID']
+        data = np.column_stack((x, y, theta, phi, E, evid))
+        print('DEBUG eventID')
+    else:
+        data = np.column_stack((x, y, theta, phi, E))
 
     return data, x, y, theta, phi, E
 

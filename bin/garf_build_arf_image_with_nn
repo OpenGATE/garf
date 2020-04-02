@@ -68,8 +68,8 @@ def garf_build_arf_image_with_nn(data_root,
     '''
     data_filename = data_root
     model_filename = nn_pth
-    output_filename = output_mhd
-
+    output_sq_mhd = output_mhd.replace(".mhd", "-Squared.mhd")
+    
     nn, model = garf.load_nn(model_filename)
 
     param = {}
@@ -83,7 +83,10 @@ def garf_build_arf_image_with_nn(data_root,
     if not folder:
         print("\nLoading dataset...")
         data, x, y, theta, phi, E = garf.load_test_dataset(data_filename)
-        garf.build_arf_image_with_nn(nn, model, data, output_mhd, param, verbose=True)
+        #garf.build_arf_image_with_nn(nn, model, data, output_mhd, param, verbose=True)
+        img, sq_img = garf.build_arf_image_with_nn(nn, model, data, param)
+        sitk.WriteImage(img, output_mhd)
+        sitk.WriteImage(sq_img, output_sq_mhd)    
     else:
         print('folder', data_root)
         # for root, dirs, files in os.walk(data_root):
@@ -115,7 +118,11 @@ def garf_build_arf_image_with_nn(data_root,
             # build image
             temp = os.path.join(data_root, output_mhd+'_temp_'+str(i)+'.mhd')
             print(arf, n, data_filename, temp)
-            garf.build_arf_image_with_nn(nn, model, data, temp, param, verbose=False)
+            #garf.build_arf_image_with_nn(nn, model, data, temp, param, verbose=False)
+            img, sq_img = garf.build_arf_image_with_nn(nn, model, data, param)
+            temp_sq = temp.replace(".mhd", "-Squared.mhd")
+            sitk.WriteImage(img, temp)
+            sitk.WriteImage(sq_img, temp_sq)    
             i = i + 1
 
 

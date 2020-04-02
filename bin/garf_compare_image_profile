@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import sys
-from dd import DD
 import numpy as np
 import SimpleITK as sitk
 import matplotlib.pyplot as plt

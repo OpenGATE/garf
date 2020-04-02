@@ -16,9 +16,9 @@ from tqdm import tqdm
 
 # -----------------------------------------------------------------------------
 def print_nn_params(params):
-    """
+    '''
     Print parameters of neural network
-    """
+    '''
     for e in params:
         if (e[0] != '#'):
             if (e != 'loss_values'):
@@ -30,10 +30,10 @@ def print_nn_params(params):
 
 # -----------------------------------------------------------------------------
 def nn_prepare_data(x_train, y_train, params):
-    """
+    '''
     Prepare the data fro training: normalisation (mean/std) and add informatino
     in the model_data information structure.
-    """
+    '''
     # itialization
     torch.manual_seed(params['seed'])
 
@@ -63,9 +63,9 @@ def nn_prepare_data(x_train, y_train, params):
 
 # -----------------------------------------------------------------------------
 def nn_init_cuda_type():
-    """
+    '''
     CPU or GPU ?
-    """
+    '''
     # CUDA or not CUDA ?
     gpu_mode = torch.cuda.is_available()
     dtypef = torch.FloatTensor
@@ -83,9 +83,9 @@ def nn_init_cuda_type():
 
 # -----------------------------------------------------------------------------
 def nn_get_optimiser(model_data, model):
-    """
+    '''
     Create the optimize (Adam + scheduler)
-    """
+    '''
     learning_rate = model_data['learning_rate']
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # weight_decay=0.000001) ## Test
@@ -99,7 +99,7 @@ def nn_get_optimiser(model_data, model):
 
 # -----------------------------------------------------------------------------
 class Net_v1(nn.Module):
-    """
+    '''
     Define the NN architecture (version 1)
 
     Input:
@@ -112,7 +112,7 @@ class Net_v1(nn.Module):
     - Input X dimension is 3: angle1, angle2, energy
     - Output Y dimension is n_ene_win (one-hot encoding)
     - activation function is ReLu
-    """
+    '''
 
     def __init__(self, H, L, n_ene_win):
         super(Net_v1, self).__init__()
@@ -135,7 +135,7 @@ class Net_v1(nn.Module):
 
 # -----------------------------------------------------------------------------
 def train_nn(x_train, y_train, params):
-    """
+    '''
     Train the ARF neural network.
 
     x_train -- x samples (3 dimensions: theta, phi, E)
@@ -153,7 +153,7 @@ def train_nn(x_train, y_train, params):
     - early_stopping
     - gpu_mode
 
-    """
+    '''
 
     # Initialization
     x_train, y_train, model_data, N = nn_prepare_data(x_train, y_train, params)
@@ -318,9 +318,9 @@ def train_nn(x_train, y_train, params):
 
 # -----------------------------------------------------------------------------
 def load_nn(filename, gpu='auto', verbose=True):
-    """
+    '''
     Load a torch NN model + all associated info
-    """
+    '''
 
     if gpu == 'auto':
         gpu_mode = torch.cuda.is_available()
@@ -329,7 +329,7 @@ def load_nn(filename, gpu='auto', verbose=True):
             gpu_mode = False
         else:
             gpu_mode = True
-        
+
     if (gpu_mode):
         print('Loading model {} with GPU'.format(filename))
         nn = torch.load(filename)
@@ -369,8 +369,18 @@ def load_nn(filename, gpu='auto', verbose=True):
 
 
 # -----------------------------------------------------------------------------
-def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
-    """
+def dump_histo(rmin, rmax, bins, x, filename):
+    r = [rmin, rmax] # FIXME max ??? --> fction 
+    histo, bin_edges = np.histogram(x, bins=bins, range=r, density=False)
+    f = open(filename, 'w')
+    for edge, hist in zip(bin_edges, histo):
+        f.write(f'{edge} {hist}\n')
+    f.close()
+
+
+# -----------------------------------------------------------------------------
+def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
+    '''
     Create the image from ARF simulation data and NN.
     Parameters are:
     - gpu_batch_size
@@ -378,7 +388,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     - spacing
     - length
     - N (nb of events for scaling)
-    """
+    '''
 
     t1 = time.time()
     if verbose:
@@ -389,7 +399,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     x_mean = model_data['x_mean']
     x_std = model_data['x_std']
     rr = model_data['RR']
-    print('rr',rr)
+    verbose and print('rr',rr)
 
     #print(model_data)
 
@@ -400,9 +410,20 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     if verbose:
         print("Nb of events:          ", N_dataset)
         print("Nb of detected events: ", N_detected)
+        print("N scale:               ", N_scale)
 
     # get the two angles and the energy
     ax = x[:, 2:5]
+
+    if debug:
+        #print(ax.shape)
+        E = ax[:,2]
+        theta = ax[:,0]
+        phi = ax[:,1]
+        b = 200
+        dump_histo(0.0, 0.4, b, E, 'energy.txt')
+        dump_histo(0.0, 180, b, theta, 'theta.txt')
+        dump_histo(0.0, 180, b, phi, 'phi.txt')
 
     # loop by batch
     i = 0
@@ -447,6 +468,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     # -----------------------------------------------------------------------------
     # consider image plane information
     psize = [size[1]*spacing[0], size[2]*spacing[1]]
+    #print(psize)
     hsize = np.divide(psize, 2.0)
 
     # -----------------------------------------------------------------------------
@@ -456,6 +478,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
         print("Compute image positions ...")
     angles = x[:, 2:4]
     t = compute_angle_offset(angles, coll_l)
+    # print('angle offset', t)
     cx = cx + t
 
     # -----------------------------------------------------------------------------
@@ -473,7 +496,11 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     u = coord[:, 1]
     u, v, w_pred = remove_out_of_image_boundaries(u, v, w_pred, size)
 
-
+    if debug:
+        b = 200
+        dump_histo(0.0, 128, b, u, 'u.txt')
+        dump_histo(0.0, 128, b, v, 'v.txt')
+    
     # -----------------------------------------------------------------------------
     # convert array of coordinates to img
     if verbose:
@@ -483,8 +510,7 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
 
     # -----------------------------------------------------------------------------
     # write final image
-    if verbose:
-        print("Write image to ", output_filename)
+    #print('N_dataset', N_dataset)
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
     img = sitk.GetImageFromArray(data_img)
@@ -492,32 +518,28 @@ def build_arf_image_with_nn(nn, model, x, output_filename, param, verbose=True):
     img.SetSpacing(spacing)
     img.SetOrigin(origin)
     img = sitk.Cast(img, sitk.sitkFloat32)
-    sitk.WriteImage(img, output_filename)
     if verbose:
         print("Computation time: {0:.3f} sec".format(time.time()-t1))
 
     # -----------------------------------------------------------------------------
     # also output the squared value
-    if verbose:
-        print("Compute squared values ...")
-    w_pred = np.square(w_pred)
+    w_pred = np.square(w_pred)    
     data_img = image_from_coordinates(data_img, u, v, w_pred)
-    data_img = data_img/(N_dataset**2)*(N_scale**2)
+    data_img = np.divide(data_img, N_dataset)
+    data_img = np.multiply(data_img, N_scale)
+    #data_img = data_img/(N_dataset**2)*(N_scale**2)
     sq_img = sitk.GetImageFromArray(data_img)
     sq_img.CopyInformation(img)
-
-    output_filename = output_filename.replace(".mhd", "-Squared.mhd")
-    if verbose:
-        print("Write image to ", output_filename)
     sq_img = sitk.Cast(sq_img, sitk.sitkFloat32)
-    sitk.WriteImage(sq_img, output_filename)
+
+    return img, sq_img
 
 
 # -----------------------------------------------------------------------------
 def nn_predict(model, model_data, x):
-    """
+    '''
     Apply the NN to predict y from x
-    """
+    '''
 
     x_mean = model_data['x_mean']
     x_std = model_data['x_std']
@@ -558,14 +580,14 @@ def nn_predict(model, model_data, x):
 
 # -----------------------------------------------------------------------------
 def compute_angle_offset(angles, length):
-    """
+    '''
     compute the x,y offset according to the angle
-    """
+    '''
 
-    max_theta = np.max(angles[:, 0])
-    min_theta = np.min(angles[:, 0])
-    max_phi = np.max(angles[:, 1])
-    min_phi = np.min(angles[:, 1])
+    #max_theta = np.max(angles[:, 0])
+    #min_theta = np.min(angles[:, 0])
+    #max_phi = np.max(angles[:, 1])
+    #min_phi = np.min(angles[:, 1])
     #print("min max theta {} {}".format(min_theta, max_theta))
     #print("min max phi {} {}".format(min_phi, max_phi))
 
@@ -573,8 +595,8 @@ def compute_angle_offset(angles, length):
     cos_theta = np.cos(angles_rad[:, 0])
     cos_phi = np.cos(angles_rad[:, 1])
 
-    tx = length * cos_phi
-    ty = length * cos_theta
+    tx = length * cos_phi    ## yes see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
+    ty = length * cos_theta  ## yes see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
     t = np.column_stack((tx, ty))
 
     return t
@@ -582,11 +604,11 @@ def compute_angle_offset(angles, length):
 
 # -----------------------------------------------------------------------------
 def normalize_logproba(x):
-    """
+    '''
     Convert un-normalized log probabilities to normalized ones (0-100%)
     Not clear how to deal with exp overflow ?
     (https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/)
-    """
+    '''
     exb = np.exp(x)
     exb_sum = np.sum(exb, axis=1)
     # divide if not equal at zero
@@ -601,9 +623,9 @@ def normalize_logproba(x):
 
 # -----------------------------------------------------------------------------
 def normalize_proba_with_russian_roulette(w_pred, channel, rr):
-    """
+    '''
     Consider rr times the values for the energy windows channel
-    """
+    '''
     # multiply column 'channel' by rr
     w_pred[:, channel] *= rr
     # normalize
@@ -617,9 +639,9 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
 
 # -----------------------------------------------------------------------------
 def remove_out_of_image_boundaries(u, v, w_pred, size):
-    """
+    '''
     Remove values out of the images (<0 or > size)
-    """
+    '''
     index = np.where(v < 0)[0]
     index = np.append(index, np.where(u < 0)[0])
     index = np.append(index, np.where(v > size[1]-1)[0])
@@ -633,10 +655,10 @@ def remove_out_of_image_boundaries(u, v, w_pred, size):
 
 # -----------------------------------------------------------------------------
 def image_from_coordinates(img, u, v, w_pred):
-    """
+    '''
     Convert an array of pixel coordinates u,v (int) and corresponding weight
     into an image
-    """
+    '''
 
     # convert to int16
     u = u.astype(np.int16)
@@ -651,10 +673,13 @@ def image_from_coordinates(img, u, v, w_pred):
 
     # sum up values for pixel coordinates which occur multiple times
     ch = []
+    ch2 = [] # nb of hits in every pixel
     ones = np.ones_like(w_pred[:, 0])
     for i in range(1, nb_ene):
         a = np.bincount(uv32, weights=w_pred[:, i])
+        b = np.bincount(uv32) ## FIXME this is optional
         ch.append(a)
+        ch2.append(b)
 
     # init image
     img.fill(0.0)
@@ -673,11 +698,15 @@ def image_from_coordinates(img, u, v, w_pred):
 
     # fill image using index broadcasting
     # Important: the >0 condition is to avoid outside elements.
-    tiny = 0
+    tiny = 0  ## FIXME
     for i in range(1, nb_ene):
         chx = ch[i-1]
-        img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] = chx[chx > tiny] ## FIXME
+        img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] = chx[chx > tiny]
+
+    # first slice with position only
+    for i in range(1, nb_ene):
+        chx = ch2[i-1]
+        img[0, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
     # end
     return img
-

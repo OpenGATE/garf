@@ -18,6 +18,11 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ),
+    install_requires=[
+        'SimpleITK',
+        'numpy',
+        'uproot',
+      ],
     scripts=[
         'bin/garf_compare_image_profile',
         'bin/garf_scale',
