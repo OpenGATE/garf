@@ -1,3 +1,10 @@
 /garf.egg-info/PKG-INFO
 /garf.egg-info/SOURCES.txt
 /garf.egg-info/dependency_links.txt
+*~
+.DS_Store
+build
+dist
+garf.egg-info/
+garf/__pycache__/
+

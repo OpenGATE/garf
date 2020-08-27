@@ -429,7 +429,10 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     i = 0
     start_index = 0
     batch_size = param['gpu_batch_size']
-    while (start_index < N_detected):
+    if N_detected <1:
+        print('ERROR ? No detected count')
+        exit(0)
+    while start_index < N_detected:
         end = int(start_index+batch_size)
         if (end > N_detected):
             end = N_detected
@@ -510,7 +513,8 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
 
     # -----------------------------------------------------------------------------
     # write final image
-    #print('N_dataset', N_dataset)
+    print('N_dataset', N_dataset)
+    print('N_scale', N_scale)
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
     img = sitk.GetImageFromArray(data_img)
