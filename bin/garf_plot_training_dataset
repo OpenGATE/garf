@@ -42,6 +42,7 @@ def garf_plot_training_dataset(data, rr):
     ax[1,0].set_xlabel('Energy (keV)')
     ax[1,1].set_xlabel('Energy window #')
 
+    rr = float(rr)
     print('Russian Roulette is', rr)
     garf.print_training_dataset_info(data, rr)
 

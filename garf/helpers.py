@@ -56,7 +56,7 @@ def print_training_dataset_info(data, rr=40):
     n = len(w)
     n_nd = len(w[w==0])
     print('Nb of particles:              {}'.format(n))
-    print('Nb of particles (RR):         {}'.format(n_nd*rr+n-n_nd))
+    print(f'Nb of particles (RR):         {n_nd*rr+n-n_nd}')
     print('Nb of non-detected particles: {} {:.2f}%'.format(n_nd, n_nd/n*100))
     print('Nb of detected particles:     {} {:.2f}%'.format(n-n_nd, (n-n_nd)/n*100))
 
