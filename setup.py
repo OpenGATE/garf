@@ -22,6 +22,7 @@ setuptools.setup(
         'SimpleITK',
         'numpy',
         'uproot',
+	'tqdm'
       ],
     scripts=[
         'bin/garf_compare_image_profile',
