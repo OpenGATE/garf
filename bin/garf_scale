@@ -20,7 +20,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.argument('image_mhd')
 
 @click.option('--ref', required=True, help='Stat file of the reference simulation')
-@click.option('--jobs', '-j', default=1, help='Consider the data have been produced by j jobs and will be divided by j')
+@click.option('--jobs', '-j', default=1.0, help='Consider the data have been produced by j jobs and will be divided by j')
 @click.option('--noise/--not-noise', '-n', default=False, help='Add Poisson noise')
 
 def garf_scale(image_mhd, ref, jobs, noise):

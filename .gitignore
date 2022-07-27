@@ -8,3 +8,5 @@ dist
 garf.egg-info/
 garf/__pycache__/
 
+/.idea/
+/refbackup

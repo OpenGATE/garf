@@ -36,7 +36,7 @@ def garf_train(param, data, output, progress_bar):
 
     # Print info
     print('Training dataset',data_filename)
-    garf.print_training_dataset_info(data)
+    garf.print_training_dataset_info(data, params['RR'])
 
     # Train
     x = data[:, 0:3]  # Input:  theta, phi, E
