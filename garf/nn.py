@@ -9,7 +9,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data.sampler import Sampler
 from torch.autograd import Variable
 import copy
-import SimpleITK as sitk
+import itk
 import time
 from tqdm import tqdm
 
@@ -517,11 +517,11 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     print('N_scale', N_scale)
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
-    img = sitk.GetImageFromArray(data_img)
+    img = itk.GetImageFromArray(data_img)
     origin = np.divide(spacing, 2.0)
     img.SetSpacing(spacing)
     img.SetOrigin(origin)
-    img = sitk.Cast(img, sitk.sitkFloat32)
+    img = itk.Cast(img, itk.F)
     if verbose:
         print("Computation time: {0:.3f} sec".format(time.time() - t1))
 
@@ -532,9 +532,9 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
     # data_img = data_img/(N_dataset**2)*(N_scale**2)
-    sq_img = sitk.GetImageFromArray(data_img)
+    sq_img = itk.GetImageFromArray(data_img)
     sq_img.CopyInformation(img)
-    sq_img = sitk.Cast(sq_img, sitk.sitkFloat32)
+    sq_img = itk.Cast(sq_img, itk.F)
 
     return img, sq_img
 
