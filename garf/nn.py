@@ -7,9 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data.sampler import Sampler
-from torch.autograd import Variable
+from torch import Tensor
 import copy
-import SimpleITK as sitk
+import itk
 import time
 from tqdm import tqdm
 
@@ -66,19 +66,21 @@ def nn_init_cuda_type():
     '''
     CPU or GPU ?
     '''
-    # CUDA or not CUDA ?
-    gpu_mode = torch.cuda.is_available()
-    dtypef = torch.FloatTensor
-    dtypei = torch.LongTensor
-    if (gpu_mode):
-        print('CUDA GPU mode is ON')
+    if torch.backends.mps.is_available():
+        gpu_mode = "mps"
+    elif torch.cuda.is_available():
+        gpu_mode = "cuda"
+    else:
+        gpu_mode = "cpu"
+
+    print('Torch mode is ' + gpu_mode)
+    if gpu_mode == "cuda:
         print('CUDA version:', torch.version.cuda)
         print('CUDA current device:', torch.cuda.current_device())
         print('CUDA device counts:', torch.cuda.device_count())
         print('CUDA device name:', torch.cuda.get_device_name(0))
-        dtypef = torch.cuda.FloatTensor
-        dtypei = torch.cuda.LongTensor
-    return dtypef, dtypei, gpu_mode
+
+    return(gpu_mode)
 
 
 # -----------------------------------------------------------------------------
@@ -168,12 +170,13 @@ def train_nn(x_train, y_train, params):
     # Set that Y are labels
     y_train = y_train.astype('int64')
 
-    # CUDA type
-    dtypef, dtypei, gpu_mode = nn_init_cuda_type()
+    # Device type
+    gpu_mode = nn_init_cuda_type()
+    device = torch.device(gpu_mode)
 
     # Pytorch Dataset
-    train_data = TensorDataset(torch.from_numpy(x_train).type(dtypef),
-                               torch.from_numpy(y_train).type(dtypei))
+    train_data = TensorDataset(torch.from_numpy(x_train).to(device),
+                               torch.from_numpy(y_train).to(device))
 
     # Batch parameters
     batch_per_epoch = model_data['batch_per_epoch']
@@ -225,6 +228,8 @@ def train_nn(x_train, y_train, params):
     previous_best = 9999
     best_epoch_index = 0
 
+    model.to(device)
+
     # Main loop
     print('\nStart learning ...')
     pbar = tqdm(total=epoch_max + 1, disable=not params['progress_bar'])
@@ -241,7 +246,7 @@ def train_nn(x_train, y_train, params):
         for batch_idx, data in enumerate(train_loader2):
             x = data[:, 0:3]
             y = data[:, 3]
-            X, Y = Variable(x).type(dtypef), Variable(y).type(dtypei)
+            X, Y = Tensor(x).to(device), Tensor(y).to(device)
 
             # Forward pass
             Y_out = model(X)
@@ -517,11 +522,11 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     print('N_scale', N_scale)
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
-    img = sitk.GetImageFromArray(data_img)
+    img = itk.GetImageFromArray(data_img)
     origin = np.divide(spacing, 2.0)
     img.SetSpacing(spacing)
     img.SetOrigin(origin)
-    img = sitk.Cast(img, sitk.sitkFloat32)
+    img = itk.Cast(img, itk.F)
     if verbose:
         print("Computation time: {0:.3f} sec".format(time.time() - t1))
 
@@ -532,9 +537,9 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
     # data_img = data_img/(N_dataset**2)*(N_scale**2)
-    sq_img = sitk.GetImageFromArray(data_img)
+    sq_img = itk.GetImageFromArray(data_img)
     sq_img.CopyInformation(img)
-    sq_img = sitk.Cast(sq_img, sitk.sitkFloat32)
+    sq_img = itk.Cast(sq_img, itk.F)
 
     return img, sq_img
 
@@ -556,24 +561,18 @@ def nn_predict(model, model_data, x):
     x = (x - x_mean) / x_std
 
     # gpu ?
-    dtypef = torch.FloatTensor
-    gpu_mode = torch.cuda.is_available()
-    if (gpu_mode):
-        dtypef = torch.cuda.FloatTensor
-        model.cuda()
+    gpu_mode = nn_init_cuda_type()
+    device = torch.device(gpu_mode)
 
     # torch encapsulation
     x = x.astype('float32')
-    vx = Variable(torch.from_numpy(x)).type(dtypef)
+    vx = Tensor(torch.from_numpy(x)).to(device)
 
     # predict values
     vy_pred = model(vx)
 
     # convert to numpy and normalize probabilities
-    if (gpu_mode):
-        y_pred = vy_pred.data.cpu().numpy()
-    else:
-        y_pred = vy_pred.data.numpy()
+    y_pred = vy_pred.data.numpy()
     y_pred = y_pred.astype(np.float64)
     y_pred = normalize_logproba(y_pred)
     y_pred = normalize_proba_with_russian_roulette(y_pred, 0, rr)
