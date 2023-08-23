@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data.sampler import Sampler
-from torch.autograd import Variable
+from torch import Tensor
 import copy
 import itk
 import time
@@ -62,23 +62,25 @@ def nn_prepare_data(x_train, y_train, params):
 
 
 # -----------------------------------------------------------------------------
-def nn_init_cuda_type():
+def nn_init_device_type():
     '''
     CPU or GPU ?
     '''
-    # CUDA or not CUDA ?
-    gpu_mode = torch.cuda.is_available()
-    dtypef = torch.FloatTensor
-    dtypei = torch.LongTensor
-    if (gpu_mode):
-        print('CUDA GPU mode is ON')
+    if torch.backends.mps.is_available():
+        device_type = "mps"
+    elif torch.cuda.is_available():
+        device_type = "cuda"
+    else:
+        device_type = "cpu"
+
+    print('Torch mode is ' + device_type)
+    if device_type == "cuda":
         print('CUDA version:', torch.version.cuda)
         print('CUDA current device:', torch.cuda.current_device())
         print('CUDA device counts:', torch.cuda.device_count())
         print('CUDA device name:', torch.cuda.get_device_name(0))
-        dtypef = torch.cuda.FloatTensor
-        dtypei = torch.cuda.LongTensor
-    return dtypef, dtypei, gpu_mode
+
+    return(device_type)
 
 
 # -----------------------------------------------------------------------------
@@ -168,12 +170,13 @@ def train_nn(x_train, y_train, params):
     # Set that Y are labels
     y_train = y_train.astype('int64')
 
-    # CUDA type
-    dtypef, dtypei, gpu_mode = nn_init_cuda_type()
+    # Device type
+    device_type = nn_init_device_type()
+    device = torch.device(device_type)
 
     # Pytorch Dataset
-    train_data = TensorDataset(torch.from_numpy(x_train).type(dtypef),
-                               torch.from_numpy(y_train).type(dtypei))
+    train_data = TensorDataset(torch.from_numpy(x_train).to(device),
+                               torch.from_numpy(y_train).to(device))
 
     # Batch parameters
     batch_per_epoch = model_data['batch_per_epoch']
@@ -208,10 +211,7 @@ def train_nn(x_train, y_train, params):
     percent = epoch_max / 100.0
     loss_values = np.zeros(epoch_max + 1)
 
-    if (gpu_mode):
-        print("Set model cuda ...")
-        model.cuda()
-    model_data['gpu_mode'] = gpu_mode
+    model_data['device_type'] = device_type
 
     # Print parameters
     print_nn_params(model_data)
@@ -224,6 +224,8 @@ def train_nn(x_train, y_train, params):
     nn['optim']['data'] = []
     previous_best = 9999
     best_epoch_index = 0
+
+    model.to(device)
 
     # Main loop
     print('\nStart learning ...')
@@ -241,7 +243,7 @@ def train_nn(x_train, y_train, params):
         for batch_idx, data in enumerate(train_loader2):
             x = data[:, 0:3]
             y = data[:, 3]
-            X, Y = Variable(x).type(dtypef), Variable(y).type(dtypei)
+            X, Y = Tensor(x.to(model.fc1.weight.dtype)).to(device), Tensor(y).to(device).long()
 
             # Forward pass
             Y_out = model(X)
@@ -322,21 +324,16 @@ def load_nn(filename, gpu='auto', verbose=True):
     '''
 
     if gpu == 'auto':
-        gpu_mode = torch.cuda.is_available()
+        device_type = nn_init_device_type()
     else:
         if not gpu:
-            gpu_mode = False
+            device_type = "cpu"
         else:
-            gpu_mode = True
+            device_type = nn_init_device_type()
 
-    if gpu_mode:
-        if verbose:
-            print('Loading model {} with GPU'.format(filename))
-        nn = torch.load(filename)
-    else:
-        if verbose:
-            print('Loading model {} *without* GPU'.format(filename))
-        nn = torch.load(filename, map_location=lambda storage, loc: storage)
+    if verbose:
+        print("Loading model " + filename + " with " + device_type)
+    nn = torch.load(filename, map_location=torch.device(device_type))
     model_data = nn['model_data']
 
     # FIXME
@@ -556,24 +553,19 @@ def nn_predict(model, model_data, x):
     x = (x - x_mean) / x_std
 
     # gpu ?
-    dtypef = torch.FloatTensor
-    gpu_mode = torch.cuda.is_available()
-    if (gpu_mode):
-        dtypef = torch.cuda.FloatTensor
-        model.cuda()
+    device_type = nn_init_device_type()
+    device = torch.device(device_type)
+    model.to(device)
 
     # torch encapsulation
     x = x.astype('float32')
-    vx = Variable(torch.from_numpy(x)).type(dtypef)
+    vx = Tensor(torch.from_numpy(x)).to(device)
 
     # predict values
     vy_pred = model(vx)
 
     # convert to numpy and normalize probabilities
-    if (gpu_mode):
-        y_pred = vy_pred.data.cpu().numpy()
-    else:
-        y_pred = vy_pred.data.numpy()
+    y_pred = vy_pred.data.cpu().numpy()
     y_pred = y_pred.astype(np.float64)
     y_pred = normalize_logproba(y_pred)
     y_pred = normalize_proba_with_russian_roulette(y_pred, 0, rr)
