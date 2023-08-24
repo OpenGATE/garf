@@ -565,10 +565,10 @@ def nn_predict(model, model_data, x):
     vy_pred = model(vx)
 
     # convert to numpy and normalize probabilities
-    y_pred = vy_pred.data.cpu().numpy()
-    y_pred = y_pred.astype(np.float64)
-    y_pred = normalize_logproba(y_pred)
+    y_pred = normalize_logproba(vy_pred.data)
     y_pred = normalize_proba_with_russian_roulette(y_pred, 0, rr)
+    y_pred = y_pred.cpu().numpy()
+    y_pred = y_pred.astype(np.float64)
 
     # return
     return y_pred
@@ -605,12 +605,11 @@ def normalize_logproba(x):
     Not clear how to deal with exp overflow ?
     (https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/)
     '''
-    exb = np.exp(x)
-    exb_sum = np.sum(exb, axis=1)
+    exb = torch.exp(x)
+    exb_sum = torch.sum(exb, axis=1)
     # divide if not equal at zero
-    p = np.divide(exb.T, exb_sum,
-                  out=np.zeros_like(exb.T),
-                  where=exb_sum != 0).T
+    p = torch.divide(exb.T, exb_sum,
+                     out=torch.zeros_like(exb.T)).T
     # check (should be equal to 1.0)
     # check = np.sum(p, axis=1)
     # print(check)
@@ -625,10 +624,10 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
     # multiply column 'channel' by rr
     w_pred[:, channel] *= rr
     # normalize
-    p_sum = np.sum(w_pred, axis=1, keepdims=True)
+    p_sum = torch.sum(w_pred, axis=1, keepdims=True)
     w_pred = w_pred / p_sum
     # check
-    # p_sum = np.sum(w_pred, axis=1)
+    # p_sum = torch.sum(w_pred, axis=1)
     # print(p_sum)
     return w_pred
 
