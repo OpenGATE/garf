@@ -7,9 +7,9 @@ import copy
 
 # -----------------------------------------------------------------------------
 def load_training_dataset(filename):
-    '''
+    """
     Load a training dataset in root format (theta, phi, E, w)
-    '''
+    """
     # Check if file exist
     if (not os.path.isfile(filename)):
         print("File '" + filename + "' does not exist.")
@@ -46,9 +46,9 @@ def load_training_dataset(filename):
 
 # -----------------------------------------------------------------------------
 def print_training_dataset_info(data, rr=40):
-    '''
+    """
     Print training dataset information
-    '''
+    """
     theta = data[:, 0]
     phi = data[:, 1]
     E = data[:, 2]
@@ -72,9 +72,9 @@ def print_training_dataset_info(data, rr=40):
 
 # -----------------------------------------------------------------------------
 def load_test_dataset(filename):
-    '''
+    """
     Load a test dataset in root format (theta, phi, E, x, y)
-    '''
+    """
 
     # Check if file exist
     if (not os.path.isfile(filename)):
@@ -116,10 +116,10 @@ def load_test_dataset(filename):
 
 # -----------------------------------------------------------------------------
 def image_uncertainty_arf(data, sq_data, N, threshold):
-    '''
+    """
     Compute image uncertainty for ARF image
     threshold as a % of the max
-    '''
+    """
 
     uncert = np.copy(data)
     uncert.fill(0.0)
@@ -164,10 +164,10 @@ def image_uncertainty_arf(data, sq_data, N, threshold):
 
 # -----------------------------------------------------------------------------
 def image_uncertainty_analog(data, threshold):
-    '''
+    """
     Compute image uncertainty for image computed with analog MC
     threshold as a % of the max
-    '''
+    """
 
     uncert = np.copy(data)
     uncert.fill(0.0)
