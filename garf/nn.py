@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-import os
-import uproot
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
-from torch.utils.data.sampler import Sampler
 from torch import Tensor
 import copy
 import itk
 import time
 from tqdm import tqdm
+from nn_model import Net_v1
 
 
-# -----------------------------------------------------------------------------
 def print_nn_params(params):
     """
     Print parameters of neural network
@@ -27,7 +23,6 @@ def print_nn_params(params):
                 print(e + ' : ' + str(len(params[e])) + ' values')
 
 
-# -----------------------------------------------------------------------------
 def nn_prepare_data(x_train, y_train, params):
     """
     Prepare the data for training: normalisation (mean/std) and add informatino
@@ -61,7 +56,6 @@ def nn_prepare_data(x_train, y_train, params):
     return x_train, y_train, model_data, N
 
 
-# -----------------------------------------------------------------------------
 def nn_init_device_type(gpu=True):
     """
     CPU or GPU ?
@@ -80,7 +74,6 @@ def nn_init_device_type(gpu=True):
     exit(0)
 
 
-# -----------------------------------------------------------------------------
 def nn_get_optimiser(model_data, model):
     """
     Create the optimize (Adam + scheduler)
@@ -96,43 +89,6 @@ def nn_get_optimiser(model_data, model):
     return optimizer, scheduler
 
 
-# -----------------------------------------------------------------------------
-class Net_v1(nn.Module):
-    """
-    Define the NN architecture (version 1)
-
-    Input:
-    - H:          nb of neurons per layer
-    - n_ene_win:  nb of energy windows
-
-    Description:
-    - simple Linear, fully connected NN
-    - two hidden layers
-    - Input X dimension is 3: angle1, angle2, energy
-    - Output Y dimension is n_ene_win (one-hot encoding)
-    - activation function is ReLu
-    """
-
-    def __init__(self, H, L, n_ene_win):
-        super(Net_v1, self).__init__()
-        self.fc1 = nn.Linear(3, H)  # Linear include Bias=True by default
-        self.L = L
-        self.fcts = nn.ModuleList()
-        for i in range(L):
-            self.fcts.append(nn.Linear(H, H))
-        self.fc3 = nn.Linear(H, n_ene_win)
-
-    def forward(self, X):
-        X = self.fc1(X)  # first layer
-        X = torch.clamp(X, min=0)  # relu
-        for i in range(self.L):
-            X = self.fcts[i](X)  # hidden layers
-            X = torch.clamp(X, min=0)  # relu
-        X = self.fc3(X)  # output layer
-        return X
-
-
-# -----------------------------------------------------------------------------
 def train_nn(x_train, y_train, params):
     """
     Train the ARF neural network.
@@ -164,11 +120,15 @@ def train_nn(x_train, y_train, params):
     model_data['n_ene_win'] = n_ene_win
 
     # Set that Y are labels
-    y_train = y_train.astype('int64')
+    # x_train = x_train.astype(np.float32)
+    # y_train = y_train.astype('int32')
+    # y_train = y_train.astype('int64')
 
     # Device type
-    device_type = nn_init_device_type()
+    device_type = nn_init_device_type(gpu=False)
     device = torch.device(device_type)
+    model_data['device_type'] = device_type
+    print(f'Device type is {device}')
 
     # Pytorch Dataset (unused?)
     train_data = TensorDataset(torch.from_numpy(x_train).to(device),
@@ -183,6 +143,9 @@ def train_nn(x_train, y_train, params):
     print('Data loader batch_size', batch_size)
     print('Data loader batch_per_epoch', batch_per_epoch)
     train_data2 = np.column_stack((x_train, y_train))
+    print('td2', train_data2.dtype)
+    # train_data2 = train_data2.astype(np.float32)
+    # print('td2', train_data2.dtype)
     train_loader2 = DataLoader(train_data2,
                                batch_size=batch_size,
                                num_workers=1,
@@ -204,10 +167,7 @@ def train_nn(x_train, y_train, params):
     best_loss = np.Inf
     best_epoch = 0
     best_train_loss = np.Inf
-    percent = epoch_max / 100.0
     loss_values = np.zeros(epoch_max + 1)
-
-    model_data['device_type'] = device_type
 
     # Print parameters
     print_nn_params(model_data)
@@ -221,6 +181,7 @@ def train_nn(x_train, y_train, params):
     previous_best = 9999
     best_epoch_index = 0
 
+    # set the model to the device (cpu or gpu = cuda or mps)
     model.to(device)
 
     # Main loop
@@ -239,7 +200,11 @@ def train_nn(x_train, y_train, params):
         for batch_idx, data in enumerate(train_loader2):
             x = data[:, 0:3]
             y = data[:, 3]
-            X, Y = Tensor(x.to(model.fc1.weight.dtype)).to(device), Tensor(y).to(device).long()
+            print('w', model.fc1.weight.dtype)
+            print('x', x.dtype)
+            print('y', y.dtype)
+            X = Tensor(x.to(model.fc1.weight.dtype)).to(device).long()
+            Y = Tensor(y).to(device)
 
             # Forward pass
             Y_out = model(X)
@@ -314,7 +279,6 @@ def train_nn(x_train, y_train, params):
     return nn
 
 
-# -----------------------------------------------------------------------------
 def load_nn(filename, verbose=True):
     """
     Load a torch NN model + all associated info.
@@ -353,7 +317,6 @@ def load_nn(filename, verbose=True):
     return nn, model
 
 
-# -----------------------------------------------------------------------------
 def dump_histo(rmin, rmax, bins, x, filename):
     r = [rmin, rmax]  # FIXME max ??? --> fction
     histo, bin_edges = np.histogram(x, bins=bins, range=r, density=False)
@@ -363,7 +326,6 @@ def dump_histo(rmin, rmax, bins, x, filename):
     f.close()
 
 
-# -----------------------------------------------------------------------------
 def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     """
     Create the image from ARF simulation data and NN.
@@ -435,7 +397,6 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
 
     nb_ene = len(w_pred[0])
 
-    # -----------------------------------------------------------------------------
     # Image parameters
     # image size in pixels
     size = [nb_ene, param['size'], param['size']]
@@ -449,16 +410,13 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
         print('Image spacing ', spacing)
         print('Image detector length ', coll_l)
 
-    # -----------------------------------------------------------------------------
     # Get the two first columns = coordinates
     cx = x[:, 0:2]
 
-    # -----------------------------------------------------------------------------
     # consider image plane information
     psize = [size[1] * spacing[0], size[2] * spacing[1]]
     hsize = np.divide(psize, 2.0)
 
-    # -----------------------------------------------------------------------------
     # Take angle into account: consider position at collimator + half crystal
     # length
     if verbose:
@@ -467,11 +425,9 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     t = compute_angle_offset(angles, coll_l)
     cx = cx + t
 
-    # -----------------------------------------------------------------------------
     # create outout image
     data_img = np.zeros(size, dtype=np.float64)
 
-    # -----------------------------------------------------------------------------
     # convert x,y into pixel
     # Consider coordinates + half_size of the image - center pixel offset, and
     # convert into pixel with spacing
@@ -487,14 +443,12 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
         dump_histo(0.0, 128, b, u, 'u.txt')
         dump_histo(0.0, 128, b, v, 'v.txt')
 
-    # -----------------------------------------------------------------------------
     # convert array of coordinates to img
     if verbose:
         print("Channel 0 in the output image is set to zero, it CANNOT be compared to reference data")
         print("Compute image ", size, spacing, "...")
     data_img = image_from_coordinates(data_img, u, v, w_pred)
 
-    # -----------------------------------------------------------------------------
     # write final image
     print('N_dataset', N_dataset)
     print('N_scale', N_scale)
@@ -508,7 +462,6 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     if verbose:
         print("Computation time: {0:.3f} sec".format(time.time() - t1))
 
-    # -----------------------------------------------------------------------------
     # also output the squared value
     w_pred = np.square(w_pred)
     data_img = image_from_coordinates(data_img, u, v, w_pred)
@@ -522,7 +475,6 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     return img, sq_img
 
 
-# -----------------------------------------------------------------------------
 def nn_predict(model, model_data, x):
     """
     Apply the NN to predict y from x
@@ -561,7 +513,6 @@ def nn_predict(model, model_data, x):
     return y_pred
 
 
-# -----------------------------------------------------------------------------
 def compute_angle_offset(angles, length):
     """
     compute the x,y offset according to the angle
@@ -587,7 +538,6 @@ def compute_angle_offset(angles, length):
     return t
 
 
-# -----------------------------------------------------------------------------
 def normalize_logproba(x):
     """
     Convert un-normalized log probabilities to normalized ones (0-100%)
@@ -605,7 +555,6 @@ def normalize_logproba(x):
     return p
 
 
-# -----------------------------------------------------------------------------
 def normalize_proba_with_russian_roulette(w_pred, channel, rr):
     """
     Consider rr times the values for the energy windows channel
@@ -621,7 +570,6 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
     return w_pred
 
 
-# -----------------------------------------------------------------------------
 def remove_out_of_image_boundaries(u, v, w_pred, size):
     """
     Remove values out of the images (<0 or > size)
@@ -637,7 +585,6 @@ def remove_out_of_image_boundaries(u, v, w_pred, size):
     return u, v, w_pred
 
 
-# -----------------------------------------------------------------------------
 def image_from_coordinates(img, u, v, w_pred):
     """
     Convert an array of pixel coordinates u,v (int) and corresponding weight

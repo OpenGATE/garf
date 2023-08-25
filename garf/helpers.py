@@ -11,7 +11,7 @@ def load_training_dataset(filename):
     Load a training dataset in root format (theta, phi, E, w)
     """
     # Check if file exist
-    if (not os.path.isfile(filename)):
+    if not os.path.isfile(filename):
         print("File '" + filename + "' does not exist.")
         exit()
 
@@ -35,7 +35,7 @@ def load_training_dataset(filename):
     theta = a['Theta']
     phi = a['Phi']
     E = a['E']
-    if ('w' in data.keys()):
+    if 'w' in data.keys():
         w = a['w']
     else:
         w = a['window']
@@ -77,7 +77,7 @@ def load_test_dataset(filename):
     """
 
     # Check if file exist
-    if (not os.path.isfile(filename)):
+    if not os.path.isfile(filename):
         print("File '" + filename + "' does not exist.")
         exit()
 
