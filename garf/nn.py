@@ -16,9 +16,9 @@ from tqdm import tqdm
 
 # -----------------------------------------------------------------------------
 def print_nn_params(params):
-    '''
+    """
     Print parameters of neural network
-    '''
+    """
     for e in params:
         if (e[0] != '#'):
             if (e != 'loss_values'):
@@ -29,10 +29,10 @@ def print_nn_params(params):
 
 # -----------------------------------------------------------------------------
 def nn_prepare_data(x_train, y_train, params):
-    '''
+    """
     Prepare the data for training: normalisation (mean/std) and add informatino
     in the model_data information structure.
-    '''
+    """
     # initialization
     torch.manual_seed(params['seed'])
 
@@ -62,32 +62,29 @@ def nn_prepare_data(x_train, y_train, params):
 
 
 # -----------------------------------------------------------------------------
-def nn_init_device_type():
-    '''
+def nn_init_device_type(gpu=True):
+    """
     CPU or GPU ?
-    '''
+    """
+
+    if gpu is False:
+        return "cpu"
+
     if torch.backends.mps.is_available():
-        device_type = "mps"
-    elif torch.cuda.is_available():
-        device_type = "cuda"
-    else:
-        device_type = "cpu"
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
 
-    print('Torch mode is ' + device_type)
-    if device_type == "cuda":
-        print('CUDA version:', torch.version.cuda)
-        print('CUDA current device:', torch.cuda.current_device())
-        print('CUDA device counts:', torch.cuda.device_count())
-        print('CUDA device name:', torch.cuda.get_device_name(0))
-
-    return(device_type)
+    print('Error, no GPU on this device')
+    print('')
+    exit(0)
 
 
 # -----------------------------------------------------------------------------
 def nn_get_optimiser(model_data, model):
-    '''
+    """
     Create the optimize (Adam + scheduler)
-    '''
+    """
     learning_rate = model_data['learning_rate']
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # weight_decay=0.000001) ## Test
@@ -101,7 +98,7 @@ def nn_get_optimiser(model_data, model):
 
 # -----------------------------------------------------------------------------
 class Net_v1(nn.Module):
-    '''
+    """
     Define the NN architecture (version 1)
 
     Input:
@@ -114,7 +111,7 @@ class Net_v1(nn.Module):
     - Input X dimension is 3: angle1, angle2, energy
     - Output Y dimension is n_ene_win (one-hot encoding)
     - activation function is ReLu
-    '''
+    """
 
     def __init__(self, H, L, n_ene_win):
         super(Net_v1, self).__init__()
@@ -137,7 +134,7 @@ class Net_v1(nn.Module):
 
 # -----------------------------------------------------------------------------
 def train_nn(x_train, y_train, params):
-    '''
+    """
     Train the ARF neural network.
 
     x_train -- x samples (3 dimensions: theta, phi, E)
@@ -154,8 +151,7 @@ def train_nn(x_train, y_train, params):
     - epoch_max
     - early_stopping
     - gpu_mode
-
-    '''
+    """
 
     # Initialization
     x_train, y_train, model_data, N = nn_prepare_data(x_train, y_train, params)
@@ -174,7 +170,7 @@ def train_nn(x_train, y_train, params):
     device_type = nn_init_device_type()
     device = torch.device(device_type)
 
-    # Pytorch Dataset
+    # Pytorch Dataset (unused?)
     train_data = TensorDataset(torch.from_numpy(x_train).to(device),
                                torch.from_numpy(y_train).to(device))
 
@@ -263,7 +259,8 @@ def train_nn(x_train, y_train, params):
             n_samples_processed += batch_size
 
             # Stop when batch_per_epoch is reach
-            if (batch_idx == params['batch_per_epoch']): break
+            if batch_idx == params['batch_per_epoch']:
+                break
         # end for loop train_loader
 
         # end of train
@@ -287,7 +284,7 @@ def train_nn(x_train, y_train, params):
 
         # FIXME WRONG
         # Check if need to print and store this epoch
-        if (epoch % epoch_store_every == 0 or best_train_loss < previous_best):
+        if epoch % epoch_store_every == 0 or best_train_loss < previous_best:
             tqdm.write('Epoch {} best is {:.5f} at epoch {:.0f}'.
                        format(epoch, best_loss, best_epoch))
             optim_data = dict()
@@ -307,7 +304,7 @@ def train_nn(x_train, y_train, params):
     # end for loop
     print("Training done. Best = {:.5f} at epoch {:.0f}".format(best_loss, best_epoch))
 
-    # prepare data to be save
+    # prepare data to be saved
     model_data['loss_values'] = loss_values
     model_data['final_epoch'] = epoch
     model_data['best_epoch'] = best_epoch
@@ -318,51 +315,41 @@ def train_nn(x_train, y_train, params):
 
 
 # -----------------------------------------------------------------------------
-def load_nn(filename, gpu='auto', verbose=True):
-    '''
-    Load a torch NN model + all associated info
-    '''
+def load_nn(filename, verbose=True):
+    """
+    Load a torch NN model + all associated info.
+    Always load the model on cpu only.
+    It should be moved to gpu only if needed.
+    """
 
-    if gpu == 'auto':
-        device_type = nn_init_device_type()
-    else:
-        if not gpu:
-            device_type = "cpu"
-        else:
-            device_type = nn_init_device_type()
-
-    if verbose:
-        print("Loading model " + filename + " with " + device_type)
-    nn = torch.load(filename, map_location=torch.device(device_type))
+    verbose and print("Loading model " + filename)
+    nn = torch.load(filename, map_location=torch.device('cpu'))
     model_data = nn['model_data']
 
-    # FIXME
+    # set to cpu by default
+    model_data['device'] = nn_init_device_type(False)
+
+    # print some info
     verbose and print('nb stored ', len(nn['optim']['data']))
     for d in nn['optim']['data']:
         verbose and print(d['epoch'], d['train_loss'])
 
+    # get the best epoch
     if not 'best_epoch_eval' in model_data:
         best_epoch_eval = len(nn['optim']['data']) - 1
     else:
         best_epoch_eval = model_data['best_epoch_index']
-
-    # print('index, ', best_epoch_eval)
-
-    # the best epoch is always the last stored
-    # if (not 'best_epoch_eval' in model_data):
-    #     best_epoch_eval = len(nn['optim']['data'])-1
-    #     # print("(Warning no best_epoch_eval, using the last one)")
-    # else:
-    #     best_epoch_eval = model_data['best_epoch_eval']
-    # best_epoch_eval = model_data['best_epoch_index']
     verbose and print('Index of best epoch = {}'.format(best_epoch_eval))
     verbose and print('Best epoch = {}'.format(nn['optim']['data'][best_epoch_eval]['epoch']))
+
+    # prepare the model
     state = nn['optim']['model_state'][best_epoch_eval]
     H = model_data['H']
     n_ene_win = model_data['n_ene_win']
     L = model_data['L']
     model = Net_v1(H, L, n_ene_win)
     model.load_state_dict(state)
+
     return nn, model
 
 
@@ -378,15 +365,15 @@ def dump_histo(rmin, rmax, bins, x, filename):
 
 # -----------------------------------------------------------------------------
 def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
-    '''
+    """
     Create the image from ARF simulation data and NN.
     Parameters are:
-    - gpu_batch_size
+    - batch_size
     - size
     - spacing
     - length
     - N (nb of events for scaling)
-    '''
+    """
 
     t1 = time.time()
     if verbose:
@@ -426,17 +413,18 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     # loop by batch
     i = 0
     start_index = 0
-    batch_size = param['gpu_batch_size']
+    batch_size = param['batch_size']
+    w_pred = None
     if N_detected < 1:
         print('ERROR ? No detected count')
         exit(0)
     while start_index < N_detected:
         end = int(start_index + batch_size)
-        if (end > N_detected):
+        if end > N_detected:
             end = N_detected
         tx = ax[start_index:end]
         w = nn_predict(model, model_data, tx)
-        if (i == 0):
+        if i == 0:
             w_pred = w
         else:
             w_pred = np.vstack((w_pred, w))
@@ -468,7 +456,6 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
     # -----------------------------------------------------------------------------
     # consider image plane information
     psize = [size[1] * spacing[0], size[2] * spacing[1]]
-    # print(psize)
     hsize = np.divide(psize, 2.0)
 
     # -----------------------------------------------------------------------------
@@ -478,7 +465,6 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
         print("Compute image positions ...")
     angles = x[:, 2:4]
     t = compute_angle_offset(angles, coll_l)
-    # print('angle offset', t)
     cx = cx + t
 
     # -----------------------------------------------------------------------------
@@ -538,13 +524,16 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
 
 # -----------------------------------------------------------------------------
 def nn_predict(model, model_data, x):
-    '''
+    """
     Apply the NN to predict y from x
-    '''
+    GPU vs CPU is managed by the "device" variable in the mode_data dic
+    WARNING : CPU is probably preferred here. This is a too small
+    computation to really require GPU (which may prevent good multi-thread scalability)
+    """
 
     x_mean = model_data['x_mean']
     x_std = model_data['x_std']
-    if ('rr' in model_data):
+    if 'rr' in model_data:
         rr = model_data['rr']
     else:
         rr = model_data['RR']
@@ -553,9 +542,7 @@ def nn_predict(model, model_data, x):
     x = (x - x_mean) / x_std
 
     # gpu ?
-    device_type = nn_init_device_type()
-    device = torch.device(device_type)
-    model.to(device)
+    device = model_data["device"]
 
     # torch encapsulation
     x = x.astype('float32')
@@ -576,9 +563,9 @@ def nn_predict(model, model_data, x):
 
 # -----------------------------------------------------------------------------
 def compute_angle_offset(angles, length):
-    '''
+    """
     compute the x,y offset according to the angle
-    '''
+    """
 
     # max_theta = np.max(angles[:, 0])
     # min_theta = np.min(angles[:, 0])
@@ -591,8 +578,10 @@ def compute_angle_offset(angles, length):
     cos_theta = np.cos(angles_rad[:, 0])
     cos_phi = np.cos(angles_rad[:, 1])
 
-    tx = length * cos_phi  ## yes see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
-    ty = length * cos_theta  ## yes see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
+    ## see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
+    tx = length * cos_phi
+    ## see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
+    ty = length * cos_theta
     t = np.column_stack((tx, ty))
 
     return t
@@ -600,11 +589,11 @@ def compute_angle_offset(angles, length):
 
 # -----------------------------------------------------------------------------
 def normalize_logproba(x):
-    '''
+    """
     Convert un-normalized log probabilities to normalized ones (0-100%)
     Not clear how to deal with exp overflow ?
     (https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/)
-    '''
+    """
     exb = torch.exp(x)
     exb_sum = torch.sum(exb, axis=1)
     # divide if not equal at zero
@@ -618,9 +607,9 @@ def normalize_logproba(x):
 
 # -----------------------------------------------------------------------------
 def normalize_proba_with_russian_roulette(w_pred, channel, rr):
-    '''
+    """
     Consider rr times the values for the energy windows channel
-    '''
+    """
     # multiply column 'channel' by rr
     w_pred[:, channel] *= rr
     # normalize
@@ -634,9 +623,9 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
 
 # -----------------------------------------------------------------------------
 def remove_out_of_image_boundaries(u, v, w_pred, size):
-    '''
+    """
     Remove values out of the images (<0 or > size)
-    '''
+    """
     index = np.where(v < 0)[0]
     index = np.append(index, np.where(u < 0)[0])
     index = np.append(index, np.where(v > size[1] - 1)[0])
@@ -650,10 +639,10 @@ def remove_out_of_image_boundaries(u, v, w_pred, size):
 
 # -----------------------------------------------------------------------------
 def image_from_coordinates(img, u, v, w_pred):
-    '''
+    """
     Convert an array of pixel coordinates u,v (int) and corresponding weight
     into an image
-    '''
+    """
 
     # convert to int16
     u = u.astype(np.int16)
