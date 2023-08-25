@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys
 import garf
-import ntpath
 import time
 import json
 import socket
@@ -17,11 +15,11 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.argument('output')
 @click.option('--progress-bar/--no-progress-bar', default=True)
 def garf_train(param, data, output, progress_bar):
-    '''
+    """
     \b
     Train a ARF-nn (neural network) from a training dataset.
     <PARAM> :
-    '''
+    """
     param_filename = param
     data_filename = data
     output_filename = output
