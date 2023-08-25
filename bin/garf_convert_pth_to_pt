@@ -41,7 +41,7 @@ def garf_convert_pth_to_pt(pth_filename, output, gpu, verbose):
     rr = p['RR']
     if verbose:
         print('Found Russian Roulette value: ', rr)
-    
+
     dtypef = torch.FloatTensor
     if (gpu):
         dtypef = torch.cuda.FloatTensor
@@ -56,7 +56,7 @@ def garf_convert_pth_to_pt(pth_filename, output, gpu, verbose):
     traced_script_module.save(output_pt)
     if verbose:
         print('Write model to', output_pt)
-    
+
     # Save dict nn into json
     p["x_mean"] = p["x_mean"].tolist()
     print(p["x_mean"])
@@ -65,12 +65,8 @@ def garf_convert_pth_to_pt(pth_filename, output, gpu, verbose):
     outfile = open(output_json, 'w')
     if verbose:
         print('Write info  to', output_json)
-    json.dump(p, outfile)    
+    json.dump(p, outfile)
 
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
     garf_convert_pth_to_pt()
-
-    
-
-

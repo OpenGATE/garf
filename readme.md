@@ -1,9 +1,9 @@
 
-GARF = GATE ARF 
+GARF = GATE ARF
 
 ```pip install garf```
 
-Scripts associated with the publication: 
+Scripts associated with the publication:
 Phys Med Biol. 2018 Oct 17;63(20):205013. doi: 10.1088/1361-6560/aae331.
 Learning SPECT detector angular response function with neural network for accelerating Monte-Carlo simulations.
 Sarrut D, Krah N, Badel JN, Létang JM.
@@ -14,4 +14,3 @@ A method to speed up Monte-Carlo simulations of single photon emission computed 
 - Benchmark: https://github.com/OpenGATE/GateBenchmarks/tree/master/t7_garf
 - Gate10 test: https://github.com/OpenGATE/opengate/blob/master/opengate/tests/src/test043_garf.py
 - Example: https://github.com/OpenGATE/GateContrib/tree/master/imaging_deprecated/garf
-

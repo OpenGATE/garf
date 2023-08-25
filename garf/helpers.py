@@ -25,20 +25,20 @@ def load_training_dataset(filename):
     # Look for a single key named "ARF (training)"
     k = f.keys()
     try:
-        data = f['ARF (training)']
+        data = f["ARF (training)"]
     except Exception:
         print("This root file is not a ARF (training), keys are: ", f.keys())
         exit()
 
     # Convert to arrays
-    a = data.arrays(library='np')
-    theta = a['Theta']
-    phi = a['Phi']
-    E = a['E']
-    if 'w' in data.keys():
-        w = a['w']
+    a = data.arrays(library="np")
+    theta = a["Theta"]
+    phi = a["Phi"]
+    E = a["E"]
+    if "w" in data.keys():
+        w = a["w"]
     else:
-        w = a['window']
+        w = a["window"]
     data = np.column_stack((theta, phi, E, w))
 
     return data, theta, phi, E, w
@@ -57,17 +57,23 @@ def print_training_dataset_info(data, rr=40):
     n = len(w)
     # outside window is zero
     n_nd = len(w[w == 0])
-    print('Nb of particles:              {}'.format(n))
+    print("Nb of particles:              {}".format(n))
     for i in range(6):
-        print(f'Nb of particle in windows {i} : {len(w[w == i])}')
-    print(f'RR for outside particle:     {rr}')
-    print(f'Nb of particles (RR):         {n_nd * rr + n - n_nd}')
-    print('Nb of non-detected particles: {} {:.2f}%'.format(n_nd, n_nd / n * 100))
-    print('Nb of detected particles:     {} {:.2f}%'.format(n - n_nd, (n - n_nd) / n * 100))
+        print(f"Nb of particle in windows {i} : {len(w[w == i])}")
+    print(f"RR for outside particle:     {rr}")
+    print(f"Nb of particles (RR):         {n_nd * rr + n - n_nd}")
+    print("Nb of non-detected particles: {} {:.2f}%".format(n_nd, n_nd / n * 100))
+    print(
+        "Nb of detected particles:     {} {:.2f}%".format(
+            n - n_nd, (n - n_nd) / n * 100
+        )
+    )
 
-    print('Min Max theta {:.2f} {:.2f} deg'.format(np.amin(theta), np.amax(theta)))
-    print('Min Max phi   {:.2f} {:.2f} deg'.format(np.amin(phi), np.amax(phi)))
-    print('Min Max E     {:.2f} {:.2f} keV'.format(np.amin(E * 1000), np.amax(E * 1000)))
+    print("Min Max theta {:.2f} {:.2f} deg".format(np.amin(theta), np.amax(theta)))
+    print("Min Max phi   {:.2f} {:.2f} deg".format(np.amin(phi), np.amax(phi)))
+    print(
+        "Min Max E     {:.2f} {:.2f} keV".format(np.amin(E * 1000), np.amax(E * 1000))
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -91,23 +97,23 @@ def load_test_dataset(filename):
     # Look for a single key named "ARF (training)"
     k = f.keys()
     try:
-        data = f['ARF (using)']
+        data = f["ARF (using)"]
     except Exception:
         print("This root file is not a ARF (testing), keys are: ", f.keys())
         exit()
 
     # Convert to arrays
     a = data.arrays()
-    theta = a['Theta']
-    phi = a['Phi']
-    E = a['E']
-    x = a['X']
-    y = a['Y']
+    theta = a["Theta"]
+    phi = a["Phi"]
+    E = a["E"]
+    x = a["X"]
+    y = a["Y"]
     debug = True
     if debug:  # FIXME DEBUG
-        evid = a['eventID']
+        evid = a["eventID"]
         data = np.column_stack((x, y, theta, phi, E, evid))
-        print('DEBUG eventID')
+        print("DEBUG eventID")
     else:
         data = np.column_stack((x, y, theta, phi, E))
 
@@ -133,7 +139,7 @@ def image_uncertainty_arf(data, sq_data, N, threshold):
         # Chetty2007 p 4832 history by history
         a = np.divide(sq_d, N)
         b = np.square(np.divide(d, N))
-        m = (a - b)
+        m = a - b
         m = m / (N - 1)
         sm = np.sqrt(m)
 
