@@ -8,7 +8,7 @@ import copy
 import itk
 import time
 from tqdm import tqdm
-from nn_model import Net_v1
+from .nn_model import Net_v1
 
 
 def print_nn_params(params):
@@ -16,11 +16,13 @@ def print_nn_params(params):
     Print parameters of neural network
     """
     for e in params:
-        if (e[0] != '#'):
-            if (e != 'loss_values'):
+        if e[0] != '#':
+            if e != 'loss_values':
                 print(e + ' : ' + str(params[e]))
             else:
                 print(e + ' : ' + str(len(params[e])) + ' values')
+    print('GPU CUDA available : ', torch.cuda.is_available())
+    print('GPU MPS  available : ', torch.backends.mps.is_available())
 
 
 def nn_prepare_data(x_train, y_train, params):
@@ -38,7 +40,7 @@ def nn_prepare_data(x_train, y_train, params):
     x_std = np.std(x_train, 0)
     x_train = (x_train - x_mean) / x_std
 
-    # Prepare data to be save (merge with param)
+    # Prepare data to be saved (merge with param)
     model_data = dict()
     model_data['x_mean'] = x_mean
     model_data['x_std'] = x_std
@@ -119,20 +121,11 @@ def train_nn(x_train, y_train, params):
     print("Number of energy windows:", n_ene_win)
     model_data['n_ene_win'] = n_ene_win
 
-    # Set that Y are labels
-    # x_train = x_train.astype(np.float32)
-    # y_train = y_train.astype('int32')
-    # y_train = y_train.astype('int64')
-
     # Device type
-    device_type = nn_init_device_type(gpu=False)
+    device_type = nn_init_device_type(gpu=True)
     device = torch.device(device_type)
     model_data['device_type'] = device_type
     print(f'Device type is {device}')
-
-    # Pytorch Dataset (unused?)
-    train_data = TensorDataset(torch.from_numpy(x_train).to(device),
-                               torch.from_numpy(y_train).to(device))
 
     # Batch parameters
     batch_per_epoch = model_data['batch_per_epoch']
@@ -143,14 +136,15 @@ def train_nn(x_train, y_train, params):
     print('Data loader batch_size', batch_size)
     print('Data loader batch_per_epoch', batch_per_epoch)
     train_data2 = np.column_stack((x_train, y_train))
-    print('td2', train_data2.dtype)
-    # train_data2 = train_data2.astype(np.float32)
-    # print('td2', train_data2.dtype)
+    if device_type == "mps":
+        print('With device mps (gpu), convert data to float32', train_data2.dtype)
+        train_data2 = train_data2.astype(np.float32)
+
     train_loader2 = DataLoader(train_data2,
                                batch_size=batch_size,
                                num_workers=1,
                                # pin_memory=True,
-                               shuffle=True,  ## if false ~20% faster, seems identical
+                               shuffle=True,  # if false ~20% faster, seems identical
                                drop_last=True)
 
     # Create the main NN
@@ -200,11 +194,8 @@ def train_nn(x_train, y_train, params):
         for batch_idx, data in enumerate(train_loader2):
             x = data[:, 0:3]
             y = data[:, 3]
-            print('w', model.fc1.weight.dtype)
-            print('x', x.dtype)
-            print('y', y.dtype)
-            X = Tensor(x.to(model.fc1.weight.dtype)).to(device).long()
-            Y = Tensor(y).to(device)
+            X = Tensor(x.to(model.fc1.weight.dtype)).to(device)
+            Y = Tensor(y).to(device).long()
 
             # Forward pass
             Y_out = model(X)
@@ -493,7 +484,12 @@ def nn_predict(model, model_data, x):
     # apply input model normalisation
     x = (x - x_mean) / x_std
 
-    # gpu ?
+    # gpu ? (usually not)
+    if not "device" in model_data:
+        device_type = nn_init_device_type(gpu=False)
+        device = torch.device(device_type)
+        model_data['device'] = device
+        model.to(device)
     device = model_data["device"]
 
     # torch encapsulation
