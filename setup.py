@@ -5,7 +5,7 @@ with open("readme.md", "r") as fh:
 
 setuptools.setup(
     name="garf",
-    version="2.2",
+    version="2.3",
     author="David Sarrut",
     author_email="david.sarrut@creatis.insa-lyon.fr",
     description="Utility tools for GATE ARF simulations",
