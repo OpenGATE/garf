@@ -16,13 +16,13 @@ def print_nn_params(params):
     Print parameters of neural network
     """
     for e in params:
-        if e[0] != '#':
-            if e != 'loss_values':
-                print(e + ' : ' + str(params[e]))
+        if e[0] != "#":
+            if e != "loss_values":
+                print(e + " : " + str(params[e]))
             else:
-                print(e + ' : ' + str(len(params[e])) + ' values')
-    print('GPU CUDA available : ', torch.cuda.is_available())
-    print('GPU MPS  available : ', torch.backends.mps.is_available())
+                print(e + " : " + str(len(params[e])) + " values")
+    print("GPU CUDA available : ", torch.cuda.is_available())
+    print("GPU MPS  available : ", torch.backends.mps.is_available())
 
 
 def nn_prepare_data(x_train, y_train, params):
@@ -31,7 +31,7 @@ def nn_prepare_data(x_train, y_train, params):
     in the model_data information structure.
     """
     # initialization
-    torch.manual_seed(params['seed'])
+    torch.manual_seed(params["seed"])
 
     # Data normalization
     print("Data normalization")
@@ -42,17 +42,17 @@ def nn_prepare_data(x_train, y_train, params):
 
     # Prepare data to be saved (merge with param)
     model_data = dict()
-    model_data['x_mean'] = x_mean
-    model_data['x_std'] = x_std
-    model_data['N'] = N
+    model_data["x_mean"] = x_mean
+    model_data["x_std"] = x_std
+    model_data["N"] = N
 
     # copy param except comments
     for i in params:
-        if (not i[0] == '#'):
+        if not i[0] == "#":
             model_data[i] = params[i]
 
     # Use pytorch default precision (float32)
-    x_train = x_train.astype('float32')
+    x_train = x_train.astype("float32")
 
     # return
     return x_train, y_train, model_data, N
@@ -71,8 +71,8 @@ def nn_init_device_type(gpu=True):
     if torch.cuda.is_available():
         return "cuda"
 
-    print('Error, no GPU on this device')
-    print('')
+    print("Error, no GPU on this device")
+    print("")
     exit(0)
 
 
@@ -80,12 +80,13 @@ def nn_get_optimiser(model_data, model):
     """
     Create the optimize (Adam + scheduler)
     """
-    learning_rate = model_data['learning_rate']
+    learning_rate = model_data["learning_rate"]
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # decreasing learning_rate
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min',
-                                                           verbose=False, patience=50)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, "min", verbose=False, patience=50
+    )
 
     return optimizer, scheduler
 
@@ -118,45 +119,47 @@ def train_nn(x_train, y_train, params):
     y_vals, y_train = np.unique(y_train, return_inverse=True)
     n_ene_win = len(y_vals)
     print("Number of energy windows:", n_ene_win)
-    model_data['n_ene_win'] = n_ene_win
+    model_data["n_ene_win"] = n_ene_win
 
     # Device type
     device_type = nn_init_device_type(gpu=True)
     device = torch.device(device_type)
-    model_data['device_type'] = device_type
-    print(f'Device type is {device}')
+    model_data["device_type"] = device_type
+    print(f"Device type is {device}")
 
     # Batch parameters
-    batch_per_epoch = model_data['batch_per_epoch']
-    batch_size = model_data['batch_size']
-    epoch_store_every = model_data['epoch_store_every']
+    batch_per_epoch = model_data["batch_per_epoch"]
+    batch_size = model_data["batch_size"]
+    epoch_store_every = model_data["epoch_store_every"]
 
     # DataLoader
-    print('Data loader batch_size', batch_size)
-    print('Data loader batch_per_epoch', batch_per_epoch)
+    print("Data loader batch_size", batch_size)
+    print("Data loader batch_per_epoch", batch_per_epoch)
     train_data2 = np.column_stack((x_train, y_train))
     if device_type == "mps":
-        print('With device mps (gpu), convert data to float32', train_data2.dtype)
+        print("With device mps (gpu), convert data to float32", train_data2.dtype)
         train_data2 = train_data2.astype(np.float32)
 
-    train_loader2 = DataLoader(train_data2,
-                               batch_size=batch_size,
-                               num_workers=1,
-                               # pin_memory=True,
-                               shuffle=True,  # if false ~20% faster, seems identical
-                               drop_last=True)
+    train_loader2 = DataLoader(
+        train_data2,
+        batch_size=batch_size,
+        num_workers=1,
+        # pin_memory=True,
+        shuffle=True,  # if false ~20% faster, seems identical
+        drop_last=True,
+    )
 
     # Create the main NN
-    H = model_data['H']
-    L = model_data['L']
+    H = model_data["H"]
+    L = model_data["L"]
     model = Net_v1(H, L, n_ene_win)
 
     # Create the optimizer
     optimizer, scheduler = nn_get_optimiser(model_data, model)
 
     # Main loop initialization
-    epoch_max = model_data['epoch_max']
-    early_stopping = model_data['early_stopping']
+    epoch_max = model_data["epoch_max"]
+    early_stopping = model_data["early_stopping"]
     best_loss = np.Inf
     best_epoch = 0
     best_train_loss = np.Inf
@@ -167,10 +170,10 @@ def train_nn(x_train, y_train, params):
 
     # create main structures
     nn = dict()
-    nn['model_data'] = model_data
-    nn['optim'] = dict()
-    nn['optim']['model_state'] = []
-    nn['optim']['data'] = []
+    nn["model_data"] = model_data
+    nn["optim"] = dict()
+    nn["optim"]["model_state"] = []
+    nn["optim"]["data"] = []
     previous_best = 9999
     best_epoch_index = 0
 
@@ -178,15 +181,14 @@ def train_nn(x_train, y_train, params):
     model.to(device)
 
     # Main loop
-    print('\nStart learning ...')
-    pbar = tqdm(total=epoch_max + 1, disable=not params['progress_bar'])
+    print("\nStart learning ...")
+    pbar = tqdm(total=epoch_max + 1, disable=not params["progress_bar"])
     epoch = 0
     stop = False
     while (not stop) and (epoch < epoch_max):
-
         # Train pass
         model.train()
-        train_loss = 0.
+        train_loss = 0.0
         n_samples_processed = 0
 
         # Loop on the data batch (batch_per_epoch times)
@@ -214,7 +216,7 @@ def train_nn(x_train, y_train, params):
             n_samples_processed += batch_size
 
             # Stop when batch_per_epoch is reach
-            if batch_idx == params['batch_per_epoch']:
+            if batch_idx == params["batch_per_epoch"]:
                 break
         # end for loop train_loader
 
@@ -229,8 +231,9 @@ def train_nn(x_train, y_train, params):
             best_loss = mean_loss
             best_epoch = epoch
         elif epoch - best_epoch > early_stopping:
-            tqdm.write('{} epochs without improvement, early stop.'
-                       .format(early_stopping))
+            tqdm.write(
+                "{} epochs without improvement, early stop.".format(early_stopping)
+            )
             stop = True
             break
 
@@ -240,16 +243,19 @@ def train_nn(x_train, y_train, params):
         # FIXME WRONG
         # Check if need to print and store this epoch
         if epoch % epoch_store_every == 0 or best_train_loss < previous_best:
-            tqdm.write('Epoch {} best is {:.5f} at epoch {:.0f}'.
-                       format(epoch, best_loss, best_epoch))
+            tqdm.write(
+                "Epoch {} best is {:.5f} at epoch {:.0f}".format(
+                    epoch, best_loss, best_epoch
+                )
+            )
             optim_data = dict()
-            optim_data['epoch'] = epoch
-            optim_data['train_loss'] = train_loss
+            optim_data["epoch"] = epoch
+            optim_data["train_loss"] = train_loss
             state = copy.deepcopy(model.state_dict())
-            nn['optim']['model_state'].append(state)
-            nn['optim']['data'].append(optim_data)
+            nn["optim"]["model_state"].append(state)
+            nn["optim"]["data"].append(optim_data)
             if best_train_loss < previous_best:
-                best_epoch_index = len(nn['optim']['model_state']) - 1
+                best_epoch_index = len(nn["optim"]["model_state"]) - 1
                 previous_best = best_train_loss
 
         # update progress bar
@@ -260,11 +266,11 @@ def train_nn(x_train, y_train, params):
     print("Training done. Best = {:.5f} at epoch {:.0f}".format(best_loss, best_epoch))
 
     # prepare data to be saved
-    model_data['loss_values'] = loss_values
-    model_data['final_epoch'] = epoch
-    model_data['best_epoch'] = best_epoch
-    model_data['best_epoch_index'] = best_epoch_index
-    model_data['best_loss'] = best_loss
+    model_data["loss_values"] = loss_values
+    model_data["final_epoch"] = epoch
+    model_data["best_epoch"] = best_epoch
+    model_data["best_epoch_index"] = best_epoch_index
+    model_data["best_loss"] = best_loss
 
     return nn
 
@@ -281,26 +287,28 @@ def load_nn(filename, verbose=True):
     model_data = nn['model_data']
 
     # set to cpu by default
-    model_data['device'] = nn_init_device_type(False)
+    model_data["device"] = nn_init_device_type(False)
 
     # print some info
-    verbose and print('nb stored ', len(nn['optim']['data']))
-    for d in nn['optim']['data']:
-        verbose and print(d['epoch'], d['train_loss'])
+    verbose and print("nb stored ", len(nn["optim"]["data"]))
+    for d in nn["optim"]["data"]:
+        verbose and print(d["epoch"], d["train_loss"])
 
     # get the best epoch
-    if not 'best_epoch_eval' in model_data:
-        best_epoch_eval = len(nn['optim']['data']) - 1
+    if not "best_epoch_eval" in model_data:
+        best_epoch_eval = len(nn["optim"]["data"]) - 1
     else:
-        best_epoch_eval = model_data['best_epoch_index']
-    verbose and print('Index of best epoch = {}'.format(best_epoch_eval))
-    verbose and print('Best epoch = {}'.format(nn['optim']['data'][best_epoch_eval]['epoch']))
+        best_epoch_eval = model_data["best_epoch_index"]
+    verbose and print("Index of best epoch = {}".format(best_epoch_eval))
+    verbose and print(
+        "Best epoch = {}".format(nn["optim"]["data"][best_epoch_eval]["epoch"])
+    )
 
     # prepare the model
-    state = nn['optim']['model_state'][best_epoch_eval]
-    H = model_data['H']
-    n_ene_win = model_data['n_ene_win']
-    L = model_data['L']
+    state = nn["optim"]["model_state"][best_epoch_eval]
+    H = model_data["H"]
+    n_ene_win = model_data["n_ene_win"]
+    L = model_data["L"]
     model = Net_v1(H, L, n_ene_win)
     model.load_state_dict(state)
 
@@ -310,9 +318,9 @@ def load_nn(filename, verbose=True):
 def dump_histo(rmin, rmax, bins, x, filename):
     r = [rmin, rmax]  # FIXME max ??? --> fction
     histo, bin_edges = np.histogram(x, bins=bins, range=r, density=False)
-    f = open(filename, 'w')
+    f = open(filename, "w")
     for edge, hist in zip(bin_edges, histo):
-        f.write(f'{edge} {hist}\n')
+        f.write(f"{edge} {hist}\n")
     f.close()
 
 
@@ -332,18 +340,18 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
         print(param)
 
     # Get mean/std from the NN
-    model_data = nn['model_data']
-    x_mean = model_data['x_mean']
-    x_std = model_data['x_std']
-    rr = model_data['RR']
-    verbose and print('rr', rr)
+    model_data = nn["model_data"]
+    x_mean = model_data["x_mean"]
+    x_std = model_data["x_std"]
+    rr = model_data["RR"]
+    verbose and print("rr", rr)
 
     # print(model_data)
 
     # Number of data samples
     N_detected = len(x)
-    N_dataset = float(param['N_dataset'])
-    N_scale = float(param['N_scale'])
+    N_dataset = float(param["N_dataset"])
+    N_scale = float(param["N_scale"])
     if verbose:
         print("Nb of events:          ", N_dataset)
         print("Nb of detected events: ", N_detected)
@@ -358,17 +366,17 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
         theta = ax[:, 0]
         phi = ax[:, 1]
         b = 200
-        dump_histo(0.0, 0.4, b, E, 'energy.txt')
-        dump_histo(0.0, 180, b, theta, 'theta.txt')
-        dump_histo(0.0, 180, b, phi, 'phi.txt')
+        dump_histo(0.0, 0.4, b, E, "energy.txt")
+        dump_histo(0.0, 180, b, theta, "theta.txt")
+        dump_histo(0.0, 180, b, phi, "phi.txt")
 
     # loop by batch
     i = 0
     start_index = 0
-    batch_size = param['batch_size']
+    batch_size = param["batch_size"]
     w_pred = None
     if N_detected < 1:
-        print('ERROR ? No detected count')
+        print("ERROR ? No detected count")
         exit(0)
     while start_index < N_detected:
         end = int(start_index + batch_size)
@@ -389,16 +397,16 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
 
     # Image parameters
     # image size in pixels
-    size = [nb_ene, param['size'], param['size']]
+    size = [nb_ene, param["size"], param["size"]]
     # image spacing in mm
-    spacing = [param['spacing'], param['spacing'], 1]
+    spacing = [param["spacing"], param["spacing"], 1]
     # collimator+ half crystal length in mm
-    coll_l = param['length']
+    coll_l = param["length"]
 
     if verbose:
-        print('Image size', size)
-        print('Image spacing ', spacing)
-        print('Image detector length ', coll_l)
+        print("Image size", size)
+        print("Image spacing ", spacing)
+        print("Image detector length ", coll_l)
 
     # Get the two first columns = coordinates
     cx = x[:, 0:2]
@@ -430,18 +438,20 @@ def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
 
     if debug:
         b = 200
-        dump_histo(0.0, 128, b, u, 'u.txt')
-        dump_histo(0.0, 128, b, v, 'v.txt')
+        dump_histo(0.0, 128, b, u, "u.txt")
+        dump_histo(0.0, 128, b, v, "v.txt")
 
     # convert array of coordinates to img
     if verbose:
-        print("Channel 0 in the output image is set to zero, it CANNOT be compared to reference data")
+        print(
+            "Channel 0 in the output image is set to zero, it CANNOT be compared to reference data"
+        )
         print("Compute image ", size, spacing, "...")
     data_img = image_from_coordinates(data_img, u, v, w_pred)
 
     # write final image
-    print('N_dataset', N_dataset)
-    print('N_scale', N_scale)
+    print("N_dataset", N_dataset)
+    print("N_scale", N_scale)
     data_img = np.divide(data_img, N_dataset)
     data_img = np.multiply(data_img, N_scale)
     img = itk.GetImageFromArray(data_img)
@@ -474,12 +484,12 @@ def nn_predict(model, model_data, x):
     (Or maybe it is badly coded)
     """
 
-    x_mean = model_data['x_mean']
-    x_std = model_data['x_std']
-    if 'rr' in model_data:
-        rr = model_data['rr']
+    x_mean = model_data["x_mean"]
+    x_std = model_data["x_std"]
+    if "rr" in model_data:
+        rr = model_data["rr"]
     else:
-        rr = model_data['RR']
+        rr = model_data["RR"]
 
     # apply input model normalisation
     x = (x - x_mean) / x_std
@@ -488,12 +498,12 @@ def nn_predict(model, model_data, x):
     if not "device" in model_data:
         device_type = nn_init_device_type(gpu=False)
         device = torch.device(device_type)
-        model_data['device'] = device
+        model_data["device"] = device
         model.to(device)
     device = model_data["device"]
 
     # torch encapsulation
-    x = x.astype('float32')
+    x = x.astype("float32")
     vx = Tensor(torch.from_numpy(x)).to(device)
 
     # predict values
@@ -543,8 +553,7 @@ def normalize_logproba(x):
     exb = torch.exp(x)
     exb_sum = torch.sum(exb, axis=1)
     # divide if not equal at zero
-    p = torch.divide(exb.T, exb_sum,
-                     out=torch.zeros_like(exb.T)).T
+    p = torch.divide(exb.T, exb_sum, out=torch.zeros_like(exb.T)).T
     # check (should be equal to 1.0)
     # check = np.sum(p, axis=1)
     # print(check)

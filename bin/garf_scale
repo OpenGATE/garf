@@ -33,14 +33,14 @@ def garf_scale(image_mhd, ref, jobs, noise):
     # load stat file of the reference simuation
     fp = open(ref, 'r')
     line = fp.readline()
-    while line:            
+    while line:
         m = re.match(r'.*NumberOfEvents = (.*)', line)
         if m:
             events = float(m.group(1))
         line = fp.readline()
     fp.close()
     print('Read number of event', events)
-    
+
     # get data in np
     data = sitk.GetArrayFromImage(img)
     #sq_data = sitk.GetArrayFromImage(sq_img)
