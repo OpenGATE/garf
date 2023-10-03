@@ -82,7 +82,6 @@ def nn_get_optimiser(model_data, model):
     """
     learning_rate = model_data['learning_rate']
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    # weight_decay=0.000001) ## Test
 
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min',
@@ -277,7 +276,7 @@ def load_nn(filename, verbose=True):
     It should be moved to gpu only if needed.
     """
 
-    verbose and print("Loading model " + filename)
+    verbose and print("Loading model ", filename)
     nn = torch.load(filename, map_location=torch.device('cpu'))
     model_data = nn['model_data']
 
@@ -472,6 +471,7 @@ def nn_predict(model, model_data, x):
     GPU vs CPU is managed by the "device" variable in the mode_data dic
     WARNING : CPU is probably preferred here. This is a too small
     computation to really require GPU (which may prevent good multi-thread scalability)
+    (Or maybe it is badly coded)
     """
 
     x_mean = model_data['x_mean']
