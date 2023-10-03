@@ -38,6 +38,9 @@ def garf_train(param, data, output, progress_bar):
     print("Training dataset", data_filename)
     garf.print_training_dataset_info(data, params["RR"])
 
+    # gpu mode: auto / cpu / gpu
+    params["gpu_mode"] = "auto"
+
     # Train
     x = data[:, 0:3]  # Input:  theta, phi, E
     y = data[:, 3]  # Output: w
