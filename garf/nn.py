@@ -34,7 +34,9 @@ def nn_prepare_data(x_train, y_train, params):
     in the model_data information structure.
     """
     # initialization
-    torch.manual_seed(params["seed"])
+    if "seed" in params:
+        if params["seed"] != "auto":
+            torch.manual_seed(params["seed"])
 
     # Data normalization
     print("Data normalization")
@@ -129,7 +131,8 @@ def train_nn(x_train, y_train, params):
         batch_size=batch_size,
         num_workers=1,
         # pin_memory=True,
-        shuffle=True,  # if false ~20% faster, seems identical
+        # shuffle=True,  # if false ~20% faster, seems identical
+        shuffle=False,  # if false ~20% faster, seems identical
         drop_last=True,
     )
 
