@@ -2,10 +2,9 @@
 import numpy as np
 import os
 import uproot
-import copy
+import torch
 
 
-# -----------------------------------------------------------------------------
 def load_training_dataset(filename):
     """
     Load a training dataset in root format (theta, phi, E, w)
@@ -44,7 +43,6 @@ def load_training_dataset(filename):
     return data, theta, phi, E, w
 
 
-# -----------------------------------------------------------------------------
 def print_training_dataset_info(data, rr=40):
     """
     Print training dataset information
@@ -76,7 +74,6 @@ def print_training_dataset_info(data, rr=40):
     )
 
 
-# -----------------------------------------------------------------------------
 def load_test_dataset(filename):
     """
     Load a test dataset in root format (theta, phi, E, x, y)
@@ -120,7 +117,6 @@ def load_test_dataset(filename):
     return data, x, y, theta, phi, E
 
 
-# -----------------------------------------------------------------------------
 def image_uncertainty_arf(data, sq_data, N, threshold):
     """
     Compute image uncertainty for ARF image
@@ -168,7 +164,6 @@ def image_uncertainty_arf(data, sq_data, N, threshold):
     return s_sigma, uncert
 
 
-# -----------------------------------------------------------------------------
 def image_uncertainty_analog(data, threshold):
     """
     Compute image uncertainty for image computed with analog MC
@@ -198,3 +193,35 @@ def image_uncertainty_analog(data, threshold):
         slice_i = slice_i + 1
 
     return s_sigma, uncert
+
+
+def get_gpu_device(gpu_mode):
+    current_gpu_mode = None
+    current_gpu_device = None
+    if gpu_mode == "cpu":
+        current_gpu_device = torch.device("cpu")
+        current_gpu_mode = "cpu"
+        return current_gpu_mode, current_gpu_device
+
+    if gpu_mode != "auto" and gpu_mode != "gpu":
+        print(
+            f'Error, gpu_mode can be : "cpu" or "gpu" or "auto", while it is {gpu_mode}'
+        )
+        exit(-1)
+
+    if torch.backends.mps.is_available():
+        current_gpu_device = torch.device("mps")
+        current_gpu_mode = "mps"
+    if torch.cuda.is_available():
+        current_gpu_device = torch.device("cuda")
+        current_gpu_mode = "cuda"
+
+    if gpu_mode == "gpu" and current_gpu_mode is None:
+        print("Error, no GPU on this device")
+        print("")
+        exit(-1)
+
+    if gpu_mode == "auto" and current_gpu_mode is None:
+        return get_gpu_device("cpu")
+
+    return current_gpu_mode, current_gpu_device

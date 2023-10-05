@@ -2,13 +2,14 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader
 from torch import Tensor
 import copy
 import itk
 import time
 from tqdm import tqdm
 from .nn_model import Net_v1
+from .helpers import get_gpu_device
 
 
 def print_nn_params(params):
@@ -23,15 +24,19 @@ def print_nn_params(params):
                 print(e + " : " + str(len(params[e])) + " values")
     print("GPU CUDA available : ", torch.cuda.is_available())
     print("GPU MPS  available : ", torch.backends.mps.is_available())
+    if "current_gpu_mode" in params:
+        print("GPU current        : ", params["current_gpu_mode"])
 
 
 def nn_prepare_data(x_train, y_train, params):
     """
-    Prepare the data for training: normalisation (mean/std) and add informatino
+    Prepare the data for training: normalisation (mean/std) and add information
     in the model_data information structure.
     """
     # initialization
-    torch.manual_seed(params["seed"])
+    if "seed" in params:
+        if params["seed"] != "auto":
+            torch.manual_seed(params["seed"])
 
     # Data normalization
     print("Data normalization")
@@ -58,31 +63,12 @@ def nn_prepare_data(x_train, y_train, params):
     return x_train, y_train, model_data, N
 
 
-def nn_init_device_type(gpu=True):
-    """
-    CPU or GPU ?
-    """
-
-    if gpu is False:
-        return "cpu"
-
-    if torch.backends.mps.is_available():
-        return "mps"
-    if torch.cuda.is_available():
-        return "cuda"
-
-    print("Error, no GPU on this device")
-    print("")
-    exit(0)
-
-
 def nn_get_optimiser(model_data, model):
     """
     Create the optimize (Adam + scheduler)
     """
     learning_rate = model_data["learning_rate"]
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    # weight_decay=0.000001) ## Test
 
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -109,7 +95,7 @@ def train_nn(x_train, y_train, params):
     - L
     - epoch_max
     - early_stopping
-    - gpu_mode
+    - gpu_mode : auto cpu gpu
     """
 
     # Initialization
@@ -123,10 +109,9 @@ def train_nn(x_train, y_train, params):
     model_data["n_ene_win"] = n_ene_win
 
     # Device type
-    device_type = nn_init_device_type(gpu=True)
-    device = torch.device(device_type)
-    model_data["device_type"] = device_type
-    print(f"Device type is {device}")
+    current_gpu_mode, current_gpu_device = get_gpu_device(params["gpu_mode"])
+    model_data["current_gpu_mode"] = current_gpu_mode
+    print(f"Device GPU type is {current_gpu_mode}")
 
     # Batch parameters
     batch_per_epoch = model_data["batch_per_epoch"]
@@ -137,7 +122,7 @@ def train_nn(x_train, y_train, params):
     print("Data loader batch_size", batch_size)
     print("Data loader batch_per_epoch", batch_per_epoch)
     train_data2 = np.column_stack((x_train, y_train))
-    if device_type == "mps":
+    if current_gpu_mode == "mps":
         print("With device mps (gpu), convert data to float32", train_data2.dtype)
         train_data2 = train_data2.astype(np.float32)
 
@@ -146,7 +131,8 @@ def train_nn(x_train, y_train, params):
         batch_size=batch_size,
         num_workers=1,
         # pin_memory=True,
-        shuffle=True,  # if false ~20% faster, seems identical
+        # shuffle=True,  # if false ~20% faster, seems identical
+        shuffle=False,  # if false ~20% faster, seems identical
         drop_last=True,
     )
 
@@ -179,7 +165,7 @@ def train_nn(x_train, y_train, params):
     best_epoch_index = 0
 
     # set the model to the device (cpu or gpu = cuda or mps)
-    model.to(device)
+    model.to(current_gpu_device)
 
     # Main loop
     print("\nStart learning ...")
@@ -196,8 +182,8 @@ def train_nn(x_train, y_train, params):
         for batch_idx, data in enumerate(train_loader2):
             x = data[:, 0:3]
             y = data[:, 3]
-            X = Tensor(x.to(model.fc1.weight.dtype)).to(device)
-            Y = Tensor(y).to(device).long()
+            X = Tensor(x.to(model.fc1.weight.dtype)).to(current_gpu_device)
+            Y = Tensor(y).to(current_gpu_device).long()
 
             # Forward pass
             Y_out = model(X)
@@ -283,12 +269,13 @@ def load_nn(filename, verbose=True):
     It should be moved to gpu only if needed.
     """
 
-    verbose and print("Loading model " + filename)
+    verbose and print("Loading model ", filename)
     nn = torch.load(filename, map_location=torch.device("cpu"))
     model_data = nn["model_data"]
 
     # set to cpu by default
-    model_data["device"] = nn_init_device_type(False)
+    current_gpu_mode, current_gpu_device = get_gpu_device("cpu")
+    model_data["current_gpu_device"] = current_gpu_device
 
     # print some info
     verbose and print("nb stored ", len(nn["optim"]["data"]))
@@ -482,6 +469,7 @@ def nn_predict(model, model_data, x):
     GPU vs CPU is managed by the "device" variable in the mode_data dic
     WARNING : CPU is probably preferred here. This is a too small
     computation to really require GPU (which may prevent good multi-thread scalability)
+    (Or maybe it is badly coded)
     """
 
     x_mean = model_data["x_mean"]
@@ -495,12 +483,11 @@ def nn_predict(model, model_data, x):
     x = (x - x_mean) / x_std
 
     # gpu ? (usually not)
-    if not "device" in model_data:
-        device_type = nn_init_device_type(gpu=False)
-        device = torch.device(device_type)
-        model_data["device"] = device
-        model.to(device)
-    device = model_data["device"]
+    if not "current_gpu_device" in model_data:
+        current_gpu_mode, current_gpu_device = get_gpu_device(gpu_mode="cpu")
+        model_data["current_gpu_device"] = current_gpu_device
+    device = model_data["current_gpu_device"]
+    model.to(device)
 
     # torch encapsulation
     x = x.astype("float32")

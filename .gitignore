@@ -6,14 +6,11 @@
 build
 dist
 garf.egg-info/
-garf/__pycache__/
+__pycache__
 
 /.idea/
 /refbackup
 
 /notes-push-to-pypi.txt
-/tests/output
-/tests/pth
-/tests/training_datasets
-/tests/training_datasets_temp
-/tests/save
+
+/garf_tests
