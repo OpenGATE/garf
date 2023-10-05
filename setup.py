@@ -18,7 +18,7 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ),
-    install_requires=["itk", "numpy", "uproot", "pre-commit", "tqdm"],
+    install_requires=["itk", "numpy", "uproot", "pre-commit", "torch>=2.1.0", "tqdm"],
     scripts=[
         "bin/garf_compare_image_profile",
         "bin/garf_scale",
