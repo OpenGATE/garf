@@ -21,14 +21,10 @@ setuptools.setup(
     install_requires=["itk", "numpy", "uproot", "pre-commit", "torch>=2.1.0", "tqdm"],
     scripts=[
         "bin/garf_compare_image_profile",
-        "bin/garf_scale",
         "bin/garf_plot_training_dataset",
         "bin/garf_plot_test_dataset",
-        "bin/garf_convert_pth_to_pt",
         "bin/garf_train",
         "bin/garf_nn_info",
-        "bin/garf_build_arf_image_with_nn",
-        "bin/garf_merge_images",
         "bin/pytorch_info",
     ],
 )

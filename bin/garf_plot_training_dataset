@@ -26,19 +26,15 @@ def garf_plot_training_dataset(data, rr):
     filename = data
     data, theta, phi, E, w = garf.load_training_dataset(filename)
 
-    ## histo binning
+    # histo binning
     b = 100
 
     f, ax = plt.subplots(2, 2, figsize=(10, 10))
 
-    n, bins, patches = ax[0, 0].hist(theta, b, density=True, facecolor="g", alpha=0.35)
-    n, bins, patches = ax[0, 1].hist(phi, b, density=True, facecolor="g", alpha=0.35)
-    n, bins, patches = ax[1, 0].hist(
-        E * 1000, b, density=True, facecolor="b", alpha=0.35
-    )
-    n, bins, patches = ax[1, 1].hist(
-        w[w > 0], b, density=False, facecolor="r", alpha=0.35
-    )
+    ax[0, 0].hist(theta, b, density=True, facecolor="g", alpha=0.35)
+    ax[0, 1].hist(phi, b, density=True, facecolor="g", alpha=0.35)
+    ax[1, 0].hist(E * 1000, b, density=True, facecolor="b", alpha=0.35)
+    ax[1, 1].hist(w[w > 0], b, density=False, facecolor="r", alpha=0.35)
 
     ax[0, 0].set_xlabel("Theta angle (deg)")
     ax[0, 1].set_xlabel("Phi angle (deg)")

@@ -273,7 +273,7 @@ def load_nn(filename, verbose=True):
     nn = torch.load(filename, map_location=torch.device("cpu"))
     model_data = nn["model_data"]
 
-    # set to cpu by default
+    # set to gpu mode
     current_gpu_mode, current_gpu_device = get_gpu_device("cpu")
     model_data["current_gpu_device"] = current_gpu_device
 
@@ -312,155 +312,12 @@ def dump_histo(rmin, rmax, bins, x, filename):
     f.close()
 
 
-def build_arf_image_with_nn(nn, model, x, param, verbose=True, debug=False):
-    """
-    Create the image from ARF simulation data and NN.
-    Parameters are:
-    - batch_size
-    - size
-    - spacing
-    - length
-    - N (nb of events for scaling)
-    """
-
-    t1 = time.time()
-    if verbose:
-        print(param)
-
-    # Get mean/std from the NN
-    model_data = nn["model_data"]
-    x_mean = model_data["x_mean"]
-    x_std = model_data["x_std"]
-    rr = model_data["RR"]
-    verbose and print("rr", rr)
-
-    # print(model_data)
-
-    # Number of data samples
-    N_detected = len(x)
-    N_dataset = float(param["N_dataset"])
-    N_scale = float(param["N_scale"])
-    if verbose:
-        print("Nb of events:          ", N_dataset)
-        print("Nb of detected events: ", N_detected)
-        print("N scale:               ", N_scale)
-
-    # get the two angles and the energy
-    ax = x[:, 2:5]
-
-    if debug:
-        # print(ax.shape)
-        E = ax[:, 2]
-        theta = ax[:, 0]
-        phi = ax[:, 1]
-        b = 200
-        dump_histo(0.0, 0.4, b, E, "energy.txt")
-        dump_histo(0.0, 180, b, theta, "theta.txt")
-        dump_histo(0.0, 180, b, phi, "phi.txt")
-
-    # loop by batch
-    i = 0
-    start_index = 0
-    batch_size = param["batch_size"]
-    w_pred = None
-    if N_detected < 1:
-        print("ERROR ? No detected count")
-        exit(0)
-    while start_index < N_detected:
-        end = int(start_index + batch_size)
-        if end > N_detected:
-            end = N_detected
-        tx = ax[start_index:end]
-        w = nn_predict(model, model_data, tx)
-        if i == 0:
-            w_pred = w
-        else:
-            w_pred = np.vstack((w_pred, w))
-        start_index = end
-        if verbose:
-            print("Generating counts: {}/{} ...".format(end, N_detected))
-        i = i + 1
-
-    nb_ene = len(w_pred[0])
-
-    # Image parameters
-    # image size in pixels
-    size = [nb_ene, param["size"], param["size"]]
-    # image spacing in mm
-    spacing = [param["spacing"], param["spacing"], 1]
-    # collimator+ half crystal length in mm
-    coll_l = param["length"]
-
-    if verbose:
-        print("Image size", size)
-        print("Image spacing ", spacing)
-        print("Image detector length ", coll_l)
-
-    # Get the two first columns = coordinates
-    cx = x[:, 0:2]
-
-    # consider image plane information
-    psize = [size[1] * spacing[0], size[2] * spacing[1]]
-    hsize = np.divide(psize, 2.0)
-
-    # Take angle into account: consider position at collimator + half crystal
-    # length
-    if verbose:
-        print("Compute image positions ...")
-    angles = x[:, 2:4]
-    t = compute_angle_offset(angles, coll_l)
-    cx = cx + t
-
-    # create outout image
-    data_img = np.zeros(size, dtype=np.float64)
-
-    # convert x,y into pixel
-    # Consider coordinates + half_size of the image - center pixel offset, and
-    # convert into pixel with spacing
-    offset = [spacing[0] / 2.0, spacing[1] / 2.0]
-    coord = (cx + hsize - offset) / spacing[0:2]
-    coord = np.around(coord).astype(int)
-    v = coord[:, 0]
-    u = coord[:, 1]
-    u, v, w_pred = remove_out_of_image_boundaries(u, v, w_pred, size)
-
-    if debug:
-        b = 200
-        dump_histo(0.0, 128, b, u, "u.txt")
-        dump_histo(0.0, 128, b, v, "v.txt")
-
-    # convert array of coordinates to img
-    if verbose:
-        print(
-            "Channel 0 in the output image is set to zero, it CANNOT be compared to reference data"
-        )
-        print("Compute image ", size, spacing, "...")
-    data_img = image_from_coordinates(data_img, u, v, w_pred)
-
-    # write final image
-    print("N_dataset", N_dataset)
-    print("N_scale", N_scale)
-    data_img = np.divide(data_img, N_dataset)
-    data_img = np.multiply(data_img, N_scale)
-    img = itk.GetImageFromArray(data_img)
-    origin = np.divide(spacing, 2.0)
-    img.SetSpacing(spacing)
-    img.SetOrigin(origin)
-    img = itk.Cast(img, itk.F)
-    if verbose:
-        print("Computation time: {0:.3f} sec".format(time.time() - t1))
-
-    # also output the squared value
-    w_pred = np.square(w_pred)
-    data_img = image_from_coordinates(data_img, u, v, w_pred)
-    data_img = np.divide(data_img, N_dataset)
-    data_img = np.multiply(data_img, N_scale)
-    # data_img = data_img/(N_dataset**2)*(N_scale**2)
-    sq_img = itk.GetImageFromArray(data_img)
-    sq_img.CopyInformation(img)
-    sq_img = itk.Cast(sq_img, itk.F)
-
-    return img, sq_img
+def cast_image_type(image, pixel_type):
+    OutputImageType = itk.Image[itk.F, image.GetImageDimension()]
+    castImageFilter = itk.CastImageFilter[type(image), OutputImageType].New()
+    castImageFilter.SetInput(image)
+    castImageFilter.Update()
+    return castImageFilter.GetOutput()
 
 
 def nn_predict(model, model_data, x):
@@ -484,8 +341,9 @@ def nn_predict(model, model_data, x):
 
     # gpu ? (usually not)
     if not "current_gpu_device" in model_data:
-        current_gpu_mode, current_gpu_device = get_gpu_device(gpu_mode="cpu")
+        current_gpu_mode, current_gpu_device = get_gpu_device(gpu_mode="auto")
         model_data["current_gpu_device"] = current_gpu_device
+    # print(f"GARF {model_data['current_gpu_device']}")  # FIXME
     device = model_data["current_gpu_device"]
     model.to(device)
 
@@ -510,21 +368,13 @@ def compute_angle_offset(angles, length):
     """
     compute the x,y offset according to the angle
     """
-
-    # max_theta = np.max(angles[:, 0])
-    # min_theta = np.min(angles[:, 0])
-    # max_phi = np.max(angles[:, 1])
-    # min_phi = np.min(angles[:, 1])
-    # print("min max theta {} {}".format(min_theta, max_theta))
-    # print("min max phi {} {}".format(min_phi, max_phi))
-
     angles_rad = np.deg2rad(angles)
     cos_theta = np.cos(angles_rad[:, 0])
     cos_phi = np.cos(angles_rad[:, 1])
 
-    ## see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
+    #  see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
     tx = length * cos_phi
-    ## see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
+    #  see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
     ty = length * cos_theta
     t = np.column_stack((tx, ty))
 
@@ -562,14 +412,14 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
     return w_pred
 
 
-def remove_out_of_image_boundaries(u, v, w_pred, size):
+def remove_out_of_image_boundaries2(u, v, w_pred, size):
     """
     Remove values out of the images (<0 or > size)
     """
     index = np.where(v < 0)[0]
     index = np.append(index, np.where(u < 0)[0])
-    index = np.append(index, np.where(v > size[1] - 1)[0])
-    index = np.append(index, np.where(u > size[2] - 1)[0])
+    index = np.append(index, np.where(v > size[0] - 1)[0])
+    index = np.append(index, np.where(u > size[1] - 1)[0])
     v = np.delete(v, index)
     u = np.delete(u, index)
     w_pred = np.delete(w_pred, index, axis=0)
@@ -577,7 +427,7 @@ def remove_out_of_image_boundaries(u, v, w_pred, size):
     return u, v, w_pred
 
 
-def image_from_coordinates(img, u, v, w_pred):
+def image_from_coordinates_add(img, u, v, w_pred, hit_slice=False):
     """
     Convert an array of pixel coordinates u,v (int) and corresponding weight
     into an image
@@ -594,25 +444,12 @@ def image_from_coordinates(img, u, v, w_pred):
     # nb of energy windows
     nb_ene = len(w_pred[0])
 
-    # sum up values for pixel coordinates which occur multiple times
-    ch = []
-    ch2 = []  # nb of hits in every pixel
-    ones = np.ones_like(w_pred[:, 0])
-    for i in range(1, nb_ene):
-        a = np.bincount(uv32, weights=w_pred[:, i])
-        b = np.bincount(uv32)  ## FIXME this is optional
-        ch.append(a)
-        ch2.append(b)
-
-    # init image
-    img.fill(0.0)
-
     # create range array which goes along with the arrays returned by bincount
     # (see man for np.bincount)
     uv32Bins = np.arange(np.amax(uv32) + 1, dtype=np.int32)
 
     # this will generate many 32bit values corresponding to 16bit value pairs
-    # lying outside of the image -> see conditions below
+    # lying outside the image -> see conditions below
 
     # generate 16bit view to convert back and reshape
     uv16Bins = uv32Bins.view(dtype=np.uint16)
@@ -623,13 +460,193 @@ def image_from_coordinates(img, u, v, w_pred):
     # Important: the >0 condition is to avoid outside elements.
     tiny = 0  ## FIXME
     for i in range(1, nb_ene):
-        chx = ch[i - 1]
-        img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] = chx[chx > tiny]
+        # sum up values for pixel coordinates which occur multiple times
+        chx = np.bincount(uv32, weights=w_pred[:, i])
+        img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
-    # first slice with position only
-    for i in range(1, nb_ene):
-        chx = ch2[i - 1]
-        img[0, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
+    # Consider the hit slice ?
+    if hit_slice:
+        for i in range(1, nb_ene):
+            chx = np.bincount(uv32)
+            img[0, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
-    # end
-    return img
+
+def arf_plane_init(garf_user_info, rotation_angle, n):
+    # initial image vectors
+    plane_U = np.array([1, 0, 0])
+    plane_V = np.array([0, 1, 0])
+    # get rotation from the angle
+    r = rotation_angle * garf_user_info.plane_rotation
+
+    # new image plane vectors
+    plane_U = r.apply(plane_U)
+    plane_V = r.apply(plane_V)
+
+    # normal vector is the cross product of the
+    # two direction vectors on the plane
+    plane_normal = np.cross(plane_U, plane_V)
+    plane_normal = np.array([plane_normal] * n)
+
+    # axial is Z axis
+    center = np.array([0, 0, garf_user_info.plane_distance])
+    center = r.apply(center)
+    plane_center = np.array([center] * n)
+
+    plane = {
+        "plane_U": plane_U,
+        "plane_V": plane_V,
+        "rotation": r.inv(),
+        "plane_normal": plane_normal,
+        "plane_center": plane_center,
+    }
+
+    return plane
+
+
+def arf_plane_project(x, plane, image_plane_size_mm):
+    """
+    Project the x points (Ekine X Y Z dX dY dZ)
+    on the image plane defined by plane_U, plane_V, plane_center, plane_normal
+    """
+
+    # n is the normal plane, duplicated n times
+    n = plane["plane_normal"][0 : len(x)]
+
+    # c0 is the center of the plane, duplicated n times
+    c0 = plane["plane_center"][0 : len(x)]
+
+    # r is the rotation matrix of the plane, according to the current rotation angle (around Y)
+    r = plane["rotation"]  # [0: len(x)]
+
+    # p is the set of points position generated by the GAN
+    p = x[:, 1:4]  # FIXME indices of the position
+
+    # u is the set of points direction generated by the GAN
+    u = x[:, 4:7]  # FIXME indices of the direction
+
+    # w is the set of vectors from all points to the plane center
+    w = p - c0
+
+    # project to plane
+    # dot product : out = (x*y).sum(-1)
+    # https://rosettacode.org/wiki/Find_the_intersection_of_a_line_with_a_plane#Python
+    # http://geomalgorithms.com/a05-_intersect-1.html
+    # https://github.com/pytorch/pytorch/issues/18027
+
+    # dot product between normal plane (n) and direction (u)
+    ndotu = (n * u).sum(-1)
+
+    # dot product between normal plane and vector from plane to point (w)
+    si = -(n * w).sum(-1) / ndotu
+
+    # only positive (direction to the plane)
+    mask = si > 0
+    mu = u[mask]
+    mx = x[mask]
+    mp = p[mask]
+    msi = si[mask]
+    # print(f"Remove negative direction, remains {mnb}/{len(x)}")#FIXME
+
+    # si is a (nb) size vector, expand it to (nb x 3)
+    msi = np.array([msi] * 3).T
+
+    # intersection between point-direction and plane
+    psi = mp + msi * mu
+
+    # offset of the head
+    psi = psi + c0[: len(psi)]
+
+    # apply the inverse of the rotation
+    psip = r.apply(psi)
+
+    # remove out of plane (needed ??)
+    sizex = image_plane_size_mm[0] / 2.0
+    sizey = image_plane_size_mm[1] / 2.0
+    mask1 = psip[:, 0] < sizex
+    mask2 = psip[:, 0] > -sizex
+    mask3 = psip[:, 1] < sizey
+    mask4 = psip[:, 1] > -sizey
+    m = mask1 & mask2 & mask3 & mask4
+    psip = psip[m]
+    mu = mu[m]
+    mx = mx[m]
+    nb = len(psip)
+    # print(f"Remove points that are out of detector, remains {nb}/{len(x)}") #FIXME
+
+    # reshape results
+    pu = psip[:, 0].reshape((nb, 1))  # u
+    pv = psip[:, 1].reshape((nb, 1))  # v
+    y = np.concatenate((pu, pv), axis=1)
+
+    # rotate direction according to the plane
+    mup = r.apply(mu)
+    norm = np.linalg.norm(mup, axis=1, keepdims=True)
+    mup = mup / norm
+    dx = mup[:, 0]
+    dy = mup[:, 1]
+
+    # FIXME -> clip arcos -1;1 ?
+
+    # convert direction into theta/phi
+    # theta is acos(dy)
+    # phi is acos(dx)
+    theta = np.degrees(np.arccos(dy)).reshape((nb, 1))
+    phi = np.degrees(np.arccos(dx)).reshape((nb, 1))
+    y = np.concatenate((y, theta), axis=1)
+    y = np.concatenate((y, phi), axis=1)
+
+    # concat the E
+    E = mx[:, 0].reshape((nb, 1))
+    data = np.concatenate((y, E), axis=1)
+
+    return data
+
+
+def build_arf_image_from_projected_points(garf_user_info, px, image):
+    """
+    Create a SPECT image from points on the ARF plane.
+
+    Parameters are:
+    - px = are the list of points projected on the plane
+    - image are the current image to update
+    """
+
+    # get some variable
+    nn = garf_user_info.nn
+    model = garf_user_info.model_data
+
+    # Get mean/std from the NN
+    model_data = nn["model_data"]
+
+    # get the two angles and the energy
+    ax = px[:, 2:5]  ## FIXME keys indexes
+
+    # predict weights
+    w_pred = nn_predict(model, model_data, ax)
+
+    # Get the two first columns = coordinates
+    cx = px[:, 0:2]
+
+    # Take angle into account: consider position at collimator + half crystal
+    angles = px[:, 2:4]
+    t = compute_angle_offset(angles, garf_user_info.distance_to_crystal)
+    cx = cx[:, 0:2]
+    cx = cx + t
+
+    # convert x,y into pixel
+    # Consider coordinates + half_size of the image - center pixel offset, and
+    # convert into pixel with spacing
+    coord = (
+        cx + garf_user_info.image_plane_hsize_mm - garf_user_info.image_hspacing
+    ) / garf_user_info.image_spacing
+    coord = np.around(coord).astype(int)
+    v = coord[:, 0]
+    u = coord[:, 1]
+    u, v, w_pred = remove_out_of_image_boundaries2(
+        u, v, w_pred, garf_user_info.image_size
+    )
+
+    # convert array of coordinates to img
+    image_from_coordinates_add(image, u, v, w_pred, hit_slice=garf_user_info.hit_slice)
+
+    return u.shape[0]
