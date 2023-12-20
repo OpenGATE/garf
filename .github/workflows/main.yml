@@ -40,14 +40,14 @@ jobs:
     needs: [build_wheel]
     steps:
     - name: Checkout github repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - uses: actions/download-artifact@v3
       with:
         name: dist
         path: dist/
     - name: Publish to PyPI
       if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/')
-      uses: pypa/gh-action-pypi-publish@release/v1
+      uses: pypa/gh-action-pypi-publish@master
       with:
         user: __token__
         password: ${{ secrets.PYPI }}
