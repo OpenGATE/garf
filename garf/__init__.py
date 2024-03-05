@@ -1,3 +1,4 @@
 # import files
 from .helpers import *
-from .nn import *
+from .garf_train import *
+from .garf_apply import *
