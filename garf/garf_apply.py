@@ -581,11 +581,12 @@ class GarfDetector:
         self.image_size_mm = [self.image_size[0] * self.image_spacing[0],
                               self.image_size[1] * self.image_spacing[1]]
         self.nprojs = len(self.detector_planes)
-        # -1  # minus one because ??? first channel is "all"
-        t_image_size = [self.nprojs, self.nb_ene - 1, self.image_size[0], self.image_size[1]]
-        print("t_image_size", t_image_size)
 
-        # FIXME to comments
+        '''# -1  # minus one because ??? first channel is "all"
+        t_image_size = [self.nprojs, self.nb_ene - 1, self.image_size[0], self.image_size[1]]
+        print("t_image_size", t_image_size)'''
+
+        '''# FIXME to comments
         if self.standalone_mode == 'torch':
             print(f'{self.image_size}')
             self.img_zeros = torch.zeros((self.image_size[0], self.image_size[1])).to(self.current_gpu_device)
@@ -601,7 +602,7 @@ class GarfDetector:
 
         # specific init
         if self.standalone_mode == "torch":
-            self.initialize_torch()
+            self.initialize_torch()'''
 
         # done
         self.is_initialized = True
@@ -640,6 +641,23 @@ class GarfDetector:
         self.image_spacing = torch.tensor(self.image_spacing).view(1, 2).to(self.current_gpu_device)[0]
         self.image_size_mm = self.image_size * self.image_spacing
         center = Tensor([0, 0, self.radius]).to(self.current_gpu_device)
+
+        # -1  # minus one because ??? first channel is "all"
+        t_image_size = [self.nprojs, self.nb_ene - 1, self.image_size[0], self.image_size[1]]
+        print("t_image_size", t_image_size)
+
+        # FIXME to comments
+        print(f'{self.image_size}')
+        self.img_zeros = torch.zeros((self.image_size[0], self.image_size[1])).to(self.current_gpu_device)
+        print(f'{tuple(t_image_size)=}')
+        self.output_image = torch.zeros(tuple(t_image_size)).to(self.current_gpu_device)
+        print(f'{self.output_image.shape=}')
+
+        print(f'{self.current_gpu_mode=} {self.current_gpu_device=}')
+        if self.current_gpu_mode == 'mps':
+            print('MPS -> float32')
+            self.image_size = self.image_size.astype(np.float32)
+            self.image_spacing = self.image_spacing.astype(np.float32)
 
     def initialize_planes_numpy(self, gaga_batch_size):
         planes = []
