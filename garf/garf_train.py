@@ -258,4 +258,3 @@ def train_nn(x_train, y_train, params):
     model_data["best_loss"] = best_loss
 
     return nn
-

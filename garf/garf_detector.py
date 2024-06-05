@@ -7,7 +7,7 @@ from .garf_model import Net_v1
 from .helpers import get_gpu_device
 
 
-def load_nn(filename, verbose=True, gpu_mode='auto'):
+def load_nn(filename, verbose=True, gpu_mode="auto"):
     """
     Load a torch NN model + all associated info.
     Always load the model on cpu only.
@@ -16,7 +16,7 @@ def load_nn(filename, verbose=True, gpu_mode='auto'):
 
     # gpu ? cuda or cpu or mps
     current_gpu_mode, current_gpu_device = get_gpu_device(gpu_mode)
-    verbose and print(f'GPU mode ?', current_gpu_mode, current_gpu_device)
+    verbose and print(f"GPU mode ?", current_gpu_mode, current_gpu_device)
 
     verbose and print("Loading model ", filename)
     nn = torch.load(filename, map_location=current_gpu_device)
@@ -51,7 +51,6 @@ def load_nn(filename, verbose=True, gpu_mode='auto'):
 
 
 class GarfDetector:
-
     def __init__(self):
         # user input
         self.gpu_mode = "auto"
@@ -111,7 +110,7 @@ class GarfDetector:
 
     def initialize(self, gantry_rotations):
         if self.is_initialized:
-            raise Exception(f'GarfDetector is already initialized')
+            raise Exception(f"GarfDetector is already initialized")
 
         # gpu mode
         self.current_gpu_mode, self.current_gpu_device = get_gpu_device(self.gpu_mode)
@@ -120,7 +119,9 @@ class GarfDetector:
         self.batch_size = int(self.batch_size)
 
         # load GARF NN
-        self.nn, self.model = load_nn(self.pth_filename, verbose=True, gpu_mode=self.gpu_mode)
+        self.nn, self.model = load_nn(
+            self.pth_filename, verbose=True, gpu_mode=self.gpu_mode
+        )
         self.model = self.model.to(self.current_gpu_device)
         self.model_data = self.nn["model_data"]
 
@@ -128,12 +129,14 @@ class GarfDetector:
         self.initialize_normalization()
 
         # Russian roulette
-        if 'rr' in self.model_data:
-            self.rr = self.model_data['rr']
-        if 'RR' in self.model_data:
-            self.rr = self.model_data['RR']
+        if "rr" in self.model_data:
+            self.rr = self.model_data["rr"]
+        if "RR" in self.model_data:
+            self.rr = self.model_data["RR"]
         if self.rr is None:
-            print(f'Error in GARF, no value "rr" for Russian Roulette found in {self.model_data}')
+            print(
+                f'Error in GARF, no value "rr" for Russian Roulette found in {self.model_data}'
+            )
             exit(-1)
 
         # planes
@@ -143,8 +146,10 @@ class GarfDetector:
         self.nb_ene = self.model_data["n_ene_win"]
 
         # Image size
-        self.image_size_mm = [self.image_size[0] * self.image_spacing[0],
-                              self.image_size[1] * self.image_spacing[1]]
+        self.image_size_mm = [
+            self.image_size[0] * self.image_spacing[0],
+            self.image_size[1] * self.image_spacing[1],
+        ]
 
         # done
         self.is_initialized = True
@@ -152,13 +157,13 @@ class GarfDetector:
     def initialize_normalization(self):
         md = self.model_data
         dev = self.current_gpu_device
-        if self.current_gpu_mode == 'mps':
+        if self.current_gpu_mode == "mps":
             # on OSX, with MPS GPU, the float must be 32 bits, not 64 (yet)
-            self.x_mean = torch.tensor(md['x_mean'].astype(np.float32), device=dev)
-            self.x_std = torch.tensor(md['x_std'].astype(np.float32), device=dev)
+            self.x_mean = torch.tensor(md["x_mean"].astype(np.float32), device=dev)
+            self.x_std = torch.tensor(md["x_std"].astype(np.float32), device=dev)
         else:
-            self.x_mean = torch.tensor(md['x_mean'], device=dev)
-            self.x_std = torch.tensor(md['x_std'], device=dev)
+            self.x_mean = torch.tensor(md["x_mean"], device=dev)
+            self.x_std = torch.tensor(md["x_std"], device=dev)
 
     def initialize_detector_plane_rotations(self, gantry_rotations):
         # set all rotations
@@ -174,7 +179,7 @@ class GarfDetector:
             self.detector_planes.append(dp)
 
     def initialize_torch(self):
-        if self.current_gpu_mode == 'mps':
+        if self.current_gpu_mode == "mps":
             self.image_spacing = self.image_spacing.astype(np.float32)
 
         # minus one because first channel is the hit_slice
@@ -185,9 +190,15 @@ class GarfDetector:
         t_image_size = [nb_projs, nb_channels, self.image_size[0], self.image_size[1]]
 
         # set elements to Torch and current device
-        self.img_zeros = torch.zeros((self.image_size[0], self.image_size[1])).to(self.current_gpu_device)
-        self.image_size = torch.tensor(self.image_size).view(1, 2).to(self.current_gpu_device)[0]
-        self.image_spacing = torch.tensor(self.image_spacing).view(1, 2).to(self.current_gpu_device)[0]
+        self.img_zeros = torch.zeros((self.image_size[0], self.image_size[1])).to(
+            self.current_gpu_device
+        )
+        self.image_size = (
+            torch.tensor(self.image_size).view(1, 2).to(self.current_gpu_device)[0]
+        )
+        self.image_spacing = (
+            torch.tensor(self.image_spacing).view(1, 2).to(self.current_gpu_device)[0]
+        )
         self.image_size_mm = self.image_size * self.image_spacing
         for dp in self.detector_planes:
             dp.initialize_torch()
@@ -195,7 +206,7 @@ class GarfDetector:
         # FIXME : float instead of double because of w_pred is float
         # TODO : check float / double ?
         self.output_image = np.zeros(tuple(t_image_size), dtype=np.float32)
-        if self.current_gpu_mode == 'mps':
+        if self.current_gpu_mode == "mps":
             self.output_image = self.output_image.astype(np.float32)
         self.output_image = Tensor(torch.from_numpy(self.output_image))
         self.output_image = self.output_image.to(self.current_gpu_device)
@@ -304,13 +315,13 @@ class GarfDetector:
         cx = cx + t
 
         # positions
-        coord = (cx + (self.image_size_mm / 2) - self.image_spacing / 2) / self.image_spacing
+        coord = (
+            cx + (self.image_size_mm / 2) - self.image_spacing / 2
+        ) / self.image_spacing
         uv = torch.round(coord).to(int)
 
         # remove points outside the image
-        uv, w_pred = remove_out_of_image_boundaries_torch(uv,
-                                                          w_pred,
-                                                          self.image_size)
+        uv, w_pred = remove_out_of_image_boundaries_torch(uv, w_pred, self.image_size)
 
         # do nothing if there is no hit in the image
         if uv.shape[0] == 0:
@@ -338,16 +349,20 @@ class GarfDetector:
         """
 
         # from projected points to image counts
-        u, v, w_pred = arf_from_points_to_image_counts(projected_batch,
-                                                       self.model,
-                                                       self.model_data,
-                                                       self.crystal_distance,
-                                                       self.image_size_mm,
-                                                       self.image_size,
-                                                       self.image_spacing)
+        u, v, w_pred = arf_from_points_to_image_counts(
+            projected_batch,
+            self.model,
+            self.model_data,
+            self.crystal_distance,
+            self.image_size_mm,
+            self.image_size,
+            self.image_spacing,
+        )
 
         # convert array of coordinates to img
-        image_from_coordinates_add_numpy(image, u, v, w_pred, hit_slice=self.hit_slice_flag)
+        image_from_coordinates_add_numpy(
+            image, u, v, w_pred, hit_slice=self.hit_slice_flag
+        )
 
         return u.shape[0]
 
@@ -424,7 +439,7 @@ class GarfDetectorPlane:
         self.Mt = self.Mt.to(dev)
 
     def rotation_to_tensor(self, m):
-        if self.garf_detector.current_gpu_mode == 'mps':
+        if self.garf_detector.current_gpu_mode == "mps":
             m = m.astype(np.float32)
         t = torch.from_numpy(m).float()
         t = t.to(self.garf_detector.current_gpu_device)
@@ -476,8 +491,8 @@ class GarfDetectorPlane:
 
         s = self.garf_detector.image_size_mm
         indexes_to_keep = torch.where(
-            (pos_xy_rot[:, 0].abs() < s[0] / 2) &  # image size
-            (pos_xy_rot[:, 1].abs() < s[1] / 2)
+            (pos_xy_rot[:, 0].abs() < s[0] / 2)
+            & (pos_xy_rot[:, 1].abs() < s[1] / 2)  # image size
         )[0]
 
         # convert direction into theta/phi
@@ -488,14 +503,20 @@ class GarfDetectorPlane:
         phi = torch.rad2deg(torch.arccos(dir_xy_rot[:, 0])).reshape((nb, 1))
         angles = torch.concat((theta, phi), dim=1)
 
-        batch = torch.concat((pos_xy_rot[indexes_to_keep, :],
-                              # dir_xy_rot[indexes_to_keep, :],
-                              angles[indexes_to_keep, :],
-                              energy[indexes_to_keep, :]), dim=1)
+        batch = torch.concat(
+            (
+                pos_xy_rot[indexes_to_keep, :],
+                # dir_xy_rot[indexes_to_keep, :],
+                angles[indexes_to_keep, :],
+                energy[indexes_to_keep, :],
+            ),
+            dim=1,
+        )
         return batch
 
 
 # noinspection PyUnreachableCode
+
 
 def normalize_logproba(x):
     """
@@ -533,10 +554,9 @@ def remove_out_of_image_boundaries_torch(vu, w_pred, size):
     """
     Remove values out of the images (<0 or > size)
     """
-    index = torch.where((vu[:, 0] >= 0)
-                        & (vu[:, 1] >= 0)
-                        & (vu[:, 0] < size[1])
-                        & (vu[:, 1] < size[0]))[0]
+    index = torch.where(
+        (vu[:, 0] >= 0) & (vu[:, 1] >= 0) & (vu[:, 0] < size[1]) & (vu[:, 1] < size[0])
+    )[0]
     vu_ = vu[index]
     w_pred_ = w_pred[index]
     return vu_, w_pred_
@@ -686,10 +706,10 @@ def arf_plane_intersection(batch, plane, image_plane_size_mm):
     -> See GarfDetectorPlane::intersection
     """
     # n is the normal plane, duplicated n times
-    normal = plane["plane_normal"][0: len(batch)]
+    normal = plane["plane_normal"][0 : len(batch)]
 
     # c0 is the center of the plane, duplicated n times
-    center = plane["plane_center"][0: len(batch)]
+    center = plane["plane_center"][0 : len(batch)]
 
     # r is the rotation matrix of the plane, according to the current rotation angle (around Y)
     rotation = plane["rotation"]  # [0: len(x)]
@@ -777,13 +797,15 @@ def arf_plane_intersection(batch, plane, image_plane_size_mm):
     return batch
 
 
-def arf_from_points_to_image_counts(projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy
-                                    model,  # ARF neural network model
-                                    model_data,  # associated model data
-                                    distance_to_crystal,  # from detection plane to crystal center
-                                    image_plane_size_mm,  # image plane in mm
-                                    image_plane_size_pixel,  # image plane in pixel
-                                    image_plane_spacing):  # image plane spacing
+def arf_from_points_to_image_counts(
+    projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy
+    model,  # ARF neural network model
+    model_data,  # associated model data
+    distance_to_crystal,  # from detection plane to crystal center
+    image_plane_size_mm,  # image plane in mm
+    image_plane_size_pixel,  # image plane in pixel
+    image_plane_spacing,
+):  # image plane spacing
     """
     Input : position, direction on the detector plane, energy
     Compute
@@ -812,7 +834,9 @@ def arf_from_points_to_image_counts(projected_batch,  # 5D: 2 plane coordinates,
     cx = cx + t
 
     # convert coord to pixel
-    coord = (cx + image_plane_size_mm / 2 - image_plane_spacing / 2) / image_plane_spacing
+    coord = (
+        cx + image_plane_size_mm / 2 - image_plane_spacing / 2
+    ) / image_plane_spacing
     coord = np.around(coord).astype(int)
 
     # why vu and not uv ?
@@ -820,6 +844,8 @@ def arf_from_points_to_image_counts(projected_batch,  # 5D: 2 plane coordinates,
     u = coord[:, 1]
 
     # remove points outside the image
-    u, v, w_pred = remove_out_of_image_boundaries_numpy(u, v, w_pred, image_plane_size_pixel)
+    u, v, w_pred = remove_out_of_image_boundaries_numpy(
+        u, v, w_pred, image_plane_size_pixel
+    )
 
     return u, v, w_pred
