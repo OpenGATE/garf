@@ -104,9 +104,9 @@ class GarfDetector:
         s += f"garf nb energy windows: {self.nb_ene}\n"
         s += f"garf RR: {self.rr}\n"
         if self.detector_planes is not None:
-            s += f"garf nb of detector angles: {len(self.detector_planes)}\n"
+            s += f"garf nb of detector angles: {len(self.detector_planes)}"
         else:
-            s += f"garf nb of detector angles: not initialized\n"
+            s += f"garf nb of detector angles: not initialized"
         return s
 
     def initialize(self, gantry_rotations):
@@ -239,7 +239,7 @@ class GarfDetector:
 
         return plane
 
-    def project_to_planes_torch(self, batch):
+    def project_to_planes_torch(self, batch, projected_points):
         for i, detector_plane in enumerate(self.detector_planes):
             projected_batch = detector_plane.plane_intersection(batch)
             self.build_image_from_projected_points_torch(projected_batch, i)
@@ -251,11 +251,10 @@ class GarfDetector:
         if len(projected_batch) == 0:
             return
 
-        image = data_img[i]
-        self.build_image_from_projected_points_numpy(projected_batch, image)
-
-        return
-        # FIXME wait until the batch is full ?
+        # we wait until the batch is full: this is really faster (about 1/3)
+        # image = data_img[i]
+        # self.build_image_from_projected_points_numpy(projected_batch, image)
+        # return
 
         # Store projected points until garf_batch_size is full before build image
         cpx = projected_points[i]
