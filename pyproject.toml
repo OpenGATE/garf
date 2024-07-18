@@ -1,6 +1,41 @@
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=67",
     "wheel",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+readme = { file = "readme.md", content-type = "text/markdown"}
+
+[tool.setuptools.packages]
+find = { }  # Scanning implicit namespaces is active by default
+
+[project]
+name = "garf"
+version = "2.5"
+dynamic = ["readme"]
+authors = [{ name = "David Sarrut", email = "david.sarrut@creatis.insa-lyon.fr" }]
+description = "Utility tools for GATE ARF simulations"
+license = { file = "LICENSE.md" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+        "itk",
+        "numpy",
+        "pre-commit",
+        "torch>=2.1.0",
+        "tqdm",
+]
+
+[project.scripts]
+garf_compare_image_profile = "garf.bin.garf_compare_image_profile:go"
+garf_plot_training_dataset = "garf.bin.garf_plot_training_dataset :go"
+garf_plot_test_dataset = "garf.bin.garf_plot_test_dataset:go"
+garf_train = "garf.bin.garf_train:go"
+garf_nn_info = "garf.bin.garf_nn_info:go"
+pytorch_info = "garf.bin.pytorch_info:go"
