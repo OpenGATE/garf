@@ -21,18 +21,18 @@ jobs:
     - name: Checkout github repo
       uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: 3.9
         architecture: 'x64'
     - name: Create Wheel
       run: |
-          pip install wheel
-          python setup.py sdist bdist_wheel
+          pip install build
+          python -m build
     - name: Upload wheels
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: dist
+        name: dist-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist/
 
   publish_wheel:
@@ -41,13 +41,14 @@ jobs:
     steps:
     - name: Checkout github repo
       uses: actions/checkout@v4
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
-        name: dist
+        pattern: dist-*
+        merge-multiple: true
         path: dist/
     - name: Publish to PyPI
       if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/')
-      uses: pypa/gh-action-pypi-publish@master
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: __token__
         password: ${{ secrets.PYPI }}
