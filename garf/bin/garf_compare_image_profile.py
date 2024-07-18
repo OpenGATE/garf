@@ -3,7 +3,7 @@
 
 import sys
 import numpy as np
-import SimpleITK as sitk
+import itk
 import matplotlib.pyplot as plt
 import click
 
@@ -24,8 +24,8 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @click.option("--wslice", "-w", default=int(3), help="Slice width (to smooth)")
 def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
     # Load image
-    img_ref = sitk.ReadImage(image1_mhd)
-    img = sitk.ReadImage(image2_mhd)
+    img_ref = itk.imread(image1_mhd)
+    img = itk.imread(image2_mhd)
     events = float(events)
     islice = int(islice)
     wslice = int(wslice)
@@ -34,8 +34,8 @@ def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
     img = img * events
 
     # Get the pixels values as np array
-    data_ref = sitk.GetArrayFromImage(img_ref).astype(float)
-    data = sitk.GetArrayFromImage(img).astype(float)
+    data_ref = itk.GetArrayFromImage(img_ref).astype(float)
+    data = itk.GetArrayFromImage(img).astype(float)
 
     # Sometimes not same nb of slices -> crop the data_ref
     if len(data_ref) > len(data):
