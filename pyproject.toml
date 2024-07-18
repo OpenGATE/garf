@@ -5,6 +5,10 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
 [tool.setuptools.dynamic]
 readme = { file = "readme.md", content-type = "text/markdown"}
 
@@ -33,9 +37,9 @@ dependencies = [
 ]
 
 [project.scripts]
-garf_compare_image_profile = "garf.bin.garf_compare_image_profile:go"
-garf_plot_training_dataset = "garf.bin.garf_plot_training_dataset :go"
-garf_plot_test_dataset = "garf.bin.garf_plot_test_dataset:go"
-garf_train = "garf.bin.garf_train:go"
-garf_nn_info = "garf.bin.garf_nn_info:go"
-pytorch_info = "garf.bin.pytorch_info:go"
+garf_compare_image_profile = "garf.bin.garf_compare_image_profile:garf_compare_image_profile"
+garf_plot_training_dataset = "garf.bin.garf_plot_training_dataset:garf_plot_training_dataset"
+garf_plot_test_dataset = "garf.bin.garf_plot_test_dataset:garf_plot_test_dataset"
+garf_train = "garf.bin.garf_train:garf_train"
+garf_nn_info = "garf.bin.garf_nn_info:garf_nn_info"
+pytorch_info = "garf.bin.pytorch_info:pytorch_info"
