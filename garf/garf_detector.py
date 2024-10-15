@@ -206,9 +206,7 @@ class GarfDetector:
         # FIXME : float instead of double because of w_pred is float
         # TODO : check float / double ?
         self.output_image = np.zeros(tuple(t_image_size), dtype=np.float32)
-        if self.current_gpu_mode == "mps":
-            self.output_image = self.output_image.astype(np.float32)
-        self.output_image = Tensor(torch.from_numpy(self.output_image))
+        self.output_image = torch.from_numpy(self.output_image)
         self.output_image = self.output_image.to(self.current_gpu_device)
 
     def initialize_planes_numpy(self, gaga_batch_size):
@@ -273,7 +271,7 @@ class GarfDetector:
             if len(projected_batch) > self.batch_size:
                 print(
                     f"Cannot use GARF, {len(projected_batch)} points while "
-                    f"batch size is {self.batch_size}"
+                    f"batch size is {self.batch_size}. Increase the garf batch_size."
                 )
                 exit(-1)
             projected_points[i] = projected_batch
@@ -410,7 +408,8 @@ class GarfDetector:
     def image_from_coordinates_add_torch(self, img, vu, w_pred):
         img_r = img.ravel()
         ind_r = vu[:, 1] * img.shape[0] + vu[:, 0]
-        img_r.index_add_(0, ind_r, w_pred)
+        #img_r.index_add_(dim=0, index=ind_r, source=w_pred) # <--- BUG on MPS
+        img_r = img_r.index_add(dim=0, index=ind_r, source=w_pred)
         img = img_r.reshape_as(img)
         return img
 
@@ -688,15 +687,20 @@ def image_from_coordinates_add_numpy(img, u, v, w_pred, hit_slice=False):
     # fill image using index broadcasting
     # Important: the >0 condition is to avoid outside elements.
     tiny = 0  # ??
-    for i in range(1, nb_ene):
-        # sum up values for pixel coordinates which occur multiple times
-        chx = np.bincount(uv32, weights=w_pred[:, i])
-        img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
-
-    # Consider the hit slice ?
     if hit_slice:
+        for i in range(1, nb_ene):
+            # sum up values for pixel coordinates which occur multiple times
+            chx = np.bincount(uv32, weights=w_pred[:, i])
+            img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
+        # Consider the hit slice
         chx = np.bincount(uv32)
         img[0, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
+
+    else:
+        for i in range(0, nb_ene-1):
+            # sum up values for pixel coordinates which occur multiple times
+            chx = np.bincount(uv32, weights=w_pred[:, i+1])
+            img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
 
 def arf_plane_intersection(batch, plane, image_plane_size_mm):
