@@ -220,28 +220,29 @@ def train_nn(x_train, y_train, params):
                 "{} epochs without improvement, early stop.".format(early_stopping)
             )
             stop = True
-            break
 
         # scheduler for learning rate
         scheduler.step(mean_loss)
 
         # FIXME WRONG
         # Check if need to print and store this epoch
-        if epoch % epoch_store_every == 0 or best_train_loss < previous_best:
-            tqdm.write(
-                "Epoch {} best is {:.5f} at epoch {:.0f}".format(
-                    epoch, best_loss, best_epoch
-                )
-            )
+        if best_train_loss < previous_best:
+            tqdm.write("Epoch {} loss is {:.5f}".format(epoch, best_loss))
+            previous_best = best_train_loss
+
+        if (
+            (epoch != 0 and epoch % epoch_store_every == 0)
+            or stop
+            or epoch >= epoch_max - 1
+        ):
             optim_data = dict()
+            print("Store weights", epoch)
             optim_data["epoch"] = epoch
             optim_data["train_loss"] = train_loss
             state = copy.deepcopy(model.state_dict())
             nn["optim"]["model_state"].append(state)
             nn["optim"]["data"].append(optim_data)
-            if best_train_loss < previous_best:
-                best_epoch_index = len(nn["optim"]["model_state"]) - 1
-                previous_best = best_train_loss
+            best_epoch_index = epoch
 
         # update progress bar
         pbar.update(1)
