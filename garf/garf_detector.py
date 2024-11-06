@@ -408,7 +408,7 @@ class GarfDetector:
     def image_from_coordinates_add_torch(self, img, vu, w_pred):
         img_r = img.ravel()
         ind_r = vu[:, 1] * img.shape[0] + vu[:, 0]
-        #img_r.index_add_(dim=0, index=ind_r, source=w_pred) # <--- BUG on MPS
+        # img_r.index_add_(dim=0, index=ind_r, source=w_pred) # <--- BUG on MPS
         img_r = img_r.index_add(dim=0, index=ind_r, source=w_pred)
         img = img_r.reshape_as(img)
         return img
