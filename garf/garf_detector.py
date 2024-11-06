@@ -528,8 +528,12 @@ def normalize_logproba(x):
     exb_sum = torch.sum(exb, dim=1)
     # divide if not equal at zero
     p = torch.divide(exb.T, exb_sum, out=torch.zeros_like(exb.T)).T
+
+    # sometimes: nan.
+    p[torch.isnan(p)] = 0
+
     # check (should be equal to 1.0)
-    # check = np.sum(p, axis=1)
+    # check = torch.sum(p, dim=1)
     # print(check)
     return p
 
@@ -645,7 +649,11 @@ def normalize_proba_with_russian_roulette(w_pred, channel, rr):
 
     # normalize
     p_sum = torch.sum(w_pred, axis=1, keepdims=True)
-    w_pred = w_pred / p_sum
+    # w_pred = w_pred / p_sum
+    w_pred = torch.divide(w_pred, p_sum, out=torch.zeros_like(w_pred))
+
+    # remove nan
+    w_pred[torch.isnan(w_pred)] = 0
 
     # check
     # p_sum = torch.sum(w_pred, axis=1)
@@ -697,9 +705,9 @@ def image_from_coordinates_add_numpy(img, u, v, w_pred, hit_slice=False):
         img[0, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
     else:
-        for i in range(0, nb_ene-1):
+        for i in range(0, nb_ene - 1):
             # sum up values for pixel coordinates which occur multiple times
-            chx = np.bincount(uv32, weights=w_pred[:, i+1])
+            chx = np.bincount(uv32, weights=w_pred[:, i + 1])
             img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
 
