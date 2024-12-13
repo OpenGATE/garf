@@ -19,7 +19,7 @@ def load_nn(filename, verbose=True, gpu_mode="auto"):
     verbose and print(f"GPU mode ?", current_gpu_mode, current_gpu_device)
 
     verbose and print("Loading model ", filename)
-    nn = torch.load(filename, map_location=current_gpu_device)
+    nn = torch.load(filename, map_location=current_gpu_device, weights_only=False)
     model_data = nn["model_data"]
 
     # set to gpu mode
@@ -809,7 +809,7 @@ def arf_plane_intersection(batch, plane, image_plane_size_mm):
     return batch
 
 
-def arf_from_points_to_image_counts(
+def arf_from_points_to_image_counts_OLD(
     projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy
     model,  # ARF neural network model
     model_data,  # associated model data
@@ -834,6 +834,65 @@ def arf_from_points_to_image_counts(
 
     # predict weights
     w_pred = nn_predict_numpy(model, model_data, ax)
+
+    # Get the two first columns = points coordinates
+    cx = projected_batch[:, 0:2]
+
+    # Get the two next columns = angles
+    angles = projected_batch[:, 2:4]
+
+    # Take angle into account: consider position at collimator + half crystal
+    t = compute_angle_offset_numpy(angles, distance_to_crystal)
+    cx = cx + t
+
+    # convert coord to pixel
+    coord = (
+        cx + image_plane_size_mm / 2 - image_plane_spacing / 2
+    ) / image_plane_spacing
+    coord = np.around(coord).astype(int)
+
+    # why vu and not uv ?
+    v = coord[:, 0]
+    u = coord[:, 1]
+
+    # remove points outside the image
+    u, v, w_pred = remove_out_of_image_boundaries_numpy(
+        u, v, w_pred, image_plane_size_pixel
+    )
+
+    return u, v, w_pred
+
+
+def arf_from_points_to_image_counts(
+    projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy, 1 weight
+    model,  # ARF neural network model
+    model_data,  # associated model data
+    distance_to_crystal,  # from detection plane to crystal center
+    image_plane_size_mm,  # image plane in mm
+    image_plane_size_pixel,  # image plane in pixel
+    image_plane_spacing,
+):  # image plane spacing
+    """
+    Input : position, direction on the detector plane, energy
+    Compute
+    - garf.nn_predict
+    - garf.compute_angle_offset
+    - garf.remove_out_of_image_boundaries2
+
+    Used in 1) GarfDetector class and 2) gate ARFActor
+
+    """
+
+    # get the two angles and the energy
+    ax = projected_batch[:, 2:5]
+
+    # predict weights
+    w_pred = nn_predict_numpy(model, model_data, ax)
+
+    # particle weight ?
+    if projected_batch.shape[1] == 6:
+        weights = projected_batch[:, 5]
+        w_pred = w_pred * weights[:, np.newaxis]
 
     # Get the two first columns = points coordinates
     cx = projected_batch[:, 0:2]
