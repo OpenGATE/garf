@@ -24,18 +24,19 @@ def go():
     mm = gate.g4_units.mm
     cm = gate.g4_units.cm
     deg = gate.g4_units.deg
+    Bq = gate.g4_units.Bq
 
     # options
     radius = 28 * cm
     rad = "lu177"
     colli_type = "melp"
-    activity = 4e5
+    activity = 1e8* Bq
     angle_tolerance = 10 * deg
 
     # visu
     if sim.visu:
         sim.number_of_threads = 1
-        activity = 100
+        activity = 1000* Bq
 
     # world etc
     stats = init_sim(sim)
@@ -51,6 +52,7 @@ def go():
         sim, radius, 180, size, spacing, colli_type, "detector", 2, pth
     )
     # compute the gantry rotations
+    nb_angle = 3
     intevo.rotate_gantry(det_plane1, radius, 0, initial_rotation="arf")
     intevo.rotate_gantry(det_plane2, radius, 180, initial_rotation="arf")
     det_planes = [det_plane1, det_plane2]

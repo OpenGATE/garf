@@ -53,12 +53,14 @@ def add_vox_source(sim, rad, activity, data_path):
     print(f"Total activity is {source.activity / Bq}")
     return source
 
-def add_source_point_test(sim, rad, planes, n, angle_tolerance, head_type='arf'):
-    keV = gate.g4_units.keV
+def add_source_point_test(sim, rad, planes, activity, angle_tolerance, head_type='arf'):
+    cm = gate.g4_units.cm
     source = sim.add_source("GenericSource", "source_point")
     set_source_rad_energy_spectrum(source, rad)
     source.particle = "gamma"
     source.direction.type = "iso"
+    source.position.type = "sphere"
+    source.position.radius = 1*cm
     source.direction.acceptance_angle.volumes = [p.name for p in planes]
     source.direction.acceptance_angle.skip_policy = "SkipEvents"
     source.direction.acceptance_angle.intersection_flag = True
@@ -67,13 +69,11 @@ def add_source_point_test(sim, rad, planes, n, angle_tolerance, head_type='arf')
     if head_type == 'spect':
         source.direction.acceptance_angle.normal_vector = [1, 0, 0]
     source.direction.acceptance_angle.normal_tolerance = angle_tolerance
-    source.n = n
+    source.activity = activity
     source.attached_to = 'b'
 
-    cm = gate.g4_units.cm
-
     b = sim.add_volume('Box', 'b')
-    b.translation = [3*cm, 10*cm, 2*cm]
+    #b.translation = [3*cm, 10*cm, 2*cm]
     b.translation = [3*cm, 0*cm, 2*cm]
     b.material = 'G4_AIR'
 
@@ -81,6 +81,8 @@ def add_source_point_test(sim, rad, planes, n, angle_tolerance, head_type='arf')
     set_source_rad_energy_spectrum(source, rad)
     source.particle = "gamma"
     source.direction.type = "iso"
+    source.position.type = "sphere"
+    source.position.radius = 1*cm
     source.direction.acceptance_angle.volumes = [p.name for p in planes]
     source.direction.acceptance_angle.skip_policy = "SkipEvents"
     source.direction.acceptance_angle.intersection_flag = True
@@ -89,7 +91,4 @@ def add_source_point_test(sim, rad, planes, n, angle_tolerance, head_type='arf')
     if head_type == 'spect':
         source.direction.acceptance_angle.normal_vector = [1, 0, 0]
     source.direction.acceptance_angle.normal_tolerance = angle_tolerance
-    source.n = n/2
-
-
-    return source
+    source.activity = activity/2

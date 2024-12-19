@@ -23,18 +23,19 @@ def go():
     # units
     cm = gate.g4_units.cm
     deg = gate.g4_units.deg
+    Bq = gate.g4_units.Bq
 
     # options
     radius = 28 * cm
     rad = "lu177"
     colli_type = "melp"
-    activity = 4e5
+    activity = 1e8 * Bq
     angle_tolerance = 10 * deg
 
     # visu
     if sim.visu:
         sim.number_of_threads = 1
-        activity = 100
+        activity = 1000 * Bq
 
     # world etc
     stats = init_sim(sim)
@@ -57,6 +58,7 @@ def go():
     proj2.output_filename = "projection_2.mhd"
 
     # rotate
+    nb_angle = 3
     intevo.rotate_gantry(head1, radius, 0, initial_rotation='spect')
     intevo.rotate_gantry(head2, radius, 180, initial_rotation='spect')
 
