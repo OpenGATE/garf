@@ -13,7 +13,7 @@ def go():
     sim = gate.Simulation()
 
     # main options
-    #sim.visu = True
+    # sim.visu = True
     sim.visu_type = "qt"
     sim.random_seed = "auto"
     sim.number_of_threads = 4
@@ -30,13 +30,13 @@ def go():
     radius = 28 * cm
     rad = "lu177"
     colli_type = "melp"
-    activity = 1e8* Bq
+    activity = 1e8 * Bq
     angle_tolerance = 10 * deg
 
     # visu
     if sim.visu:
         sim.number_of_threads = 1
-        activity = 1000* Bq
+        activity = 1000 * Bq
 
     # world etc
     stats = init_sim(sim)
@@ -46,19 +46,22 @@ def go():
     size = [128 * 2, 128 * 2]
     pth = Path("pth") / "intevo_lu177_v3.pth"
     det_plane1, arf1 = intevo.add_arf_detector(
-        sim, radius, 0, size, spacing, colli_type, "detector", 1, pth
+        sim, "det1", colli_type, size, spacing, pth
     )
     det_plane2, arf2 = intevo.add_arf_detector(
-        sim, radius, 180, size, spacing, colli_type, "detector", 2, pth
+        sim, "det2", colli_type, size, spacing, pth
     )
+
+    # output names
+    arf1.output_filename = "projection_1.mhd"
+    arf2.output_filename = "projection_2.mhd"
+
     # compute the gantry rotations
-    nb_angle = 3
-    intevo.rotate_gantry(det_plane1, radius, 0, initial_rotation="arf")
-    intevo.rotate_gantry(det_plane2, radius, 180, initial_rotation="arf")
-    det_planes = [det_plane1, det_plane2]
+    intevo.rotate_gantry(det_plane1, radius, 0)
+    intevo.rotate_gantry(det_plane2, radius, 180)
 
     # source for test
-    add_source_point_test(sim, rad, det_planes, activity, angle_tolerance)
+    add_source_point_test(sim, rad, (det_plane1, det_plane2), activity, angle_tolerance)
 
     # go
     sim.run()

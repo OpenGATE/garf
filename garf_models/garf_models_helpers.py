@@ -74,6 +74,30 @@ def get_collimator_from_rad(spect, rad):
     return all_collimators[spect][rad]
 
 
+def add_spect_imaging_device_OLD_TO_REMOVE(sim, spect, rad, crystal_size):
+    if spect not in all_spects:
+        fatal(f'Unknown spect system "{spect}", known are: {all_spects} ')
+    colli_type = get_collimator_from_rad(spect, rad)
+    mm = gate.g4_units.mm
+    head, colli, crystal = None, None, None
+    if spect == "intevo":
+        head, colli, crystal = intevo.add_spect_head(
+            sim, "spect", collimator_type=colli_type, debug=sim.visu == True
+        )
+        intevo.set_head_orientation_OLD_TO_REMOVE(head, colli_type, radius=0 * mm)
+    if spect == "nm670":
+        head, colli, crystal = nm670.add_spect_head(
+            sim,
+            "spect",
+            collimator_type=colli_type,
+            debug=sim.visu == True,
+            crystal_size=crystal_size,
+        )
+
+    print("Head position", head.translation)
+    return head, colli, crystal, colli_type
+
+
 def add_spect_imaging_device(sim, spect, rad, crystal_size):
     if spect not in all_spects:
         fatal(f'Unknown spect system "{spect}", known are: {all_spects} ')
@@ -84,7 +108,8 @@ def add_spect_imaging_device(sim, spect, rad, crystal_size):
         head, colli, crystal = intevo.add_spect_head(
             sim, "spect", collimator_type=colli_type, debug=sim.visu == True
         )
-        intevo.set_head_orientation(head, colli_type, radius=0 * mm)
+        # intevo.set_head_orientation_OLD_TO_REMOVE(head, colli_type, radius=0 * mm)
+        intevo.rotate_gantry(head, radius=0, start_angle_deg=0)
     if spect == "nm670":
         head, colli, crystal = nm670.add_spect_head(
             sim,
@@ -133,7 +158,24 @@ def add_digitizer(sim, spect, rad, digitizer, crystal):
     return ew
 
 
-def add_arf(sim, spect, head, colli_type, ew, rr):
+def add_arf_OLD_TO_REMOVE(sim, spect, head, colli_type, ew, rr):
+    detector_plane = None
+    arf = None
+    if spect not in all_spects:
+        fatal(f'Unknown spect system "{spect}", known are: {all_spects} ')
+    if spect == "nm670":
+        detector_plane, arf = nm670.add_actor_for_arf_training_dataset(
+            sim, head, colli_type, ew, rr=rr
+        )
+    if spect == "intevo":
+        detector_plane, arf = intevo.add_actor_for_arf_training_dataset(
+            sim, colli_type, ew, rr=rr
+        )
+    print("Plane position", detector_plane.translation)
+    return detector_plane, arf
+
+
+def add_arf_training(sim, spect, head, colli_type, ew, rr):
     detector_plane = None
     arf = None
     if spect not in all_spects:

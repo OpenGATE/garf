@@ -36,7 +36,9 @@ def go(spect, rad, digitizer, n, rr, visu, threads, crystal_size):
 
     # set the digitizer and the arf
     ew = add_digitizer(sim, spect_type, rad, digitizer, crystal)
-    detector_plane, arf = add_arf(sim, spect_type, head, colli_type, ew, rr)
+
+    # set the arf plane for training
+    detector_plane, arf = add_arf_training(sim, spect_type, head, colli_type, ew, rr)
 
     # visu option
     if visu:

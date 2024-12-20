@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import opengate.contrib.spect.siemens_intevo as intevo
-from opengate.contrib.spect.spect_helpers import add_fake_table
 from pathlib import Path
 from digitizers import *
 from test01_helpers import init_sim, add_source_point_test
@@ -19,9 +18,10 @@ def go():
     sim.random_seed = "auto"
     sim.number_of_threads = 4
     sim.progress_bar = True
-    sim.output_dir = Path("test01") / f"reference"
+    sim.output_dir = Path("test01") / f"free_flight"
 
     # units
+    mm = gate.g4_units.mm
     cm = gate.g4_units.cm
     deg = gate.g4_units.deg
     Bq = gate.g4_units.Bq
@@ -41,34 +41,32 @@ def go():
     # world etc
     stats = init_sim(sim)
 
-    # set the spect head
-    head1, colli1, crystal1 = intevo.add_spect_head(
-        sim, "spect1", collimator_type=colli_type, debug=sim.visu == True
+    # set the two spect heads
+    spacing = [4.7951998710632 * mm / 2, 4.7951998710632 * mm / 2]
+    size = [128 * 2, 128 * 2]
+    pth = Path("pth") / "intevo_lu177_v3.pth"
+    det_plane1, arf1 = intevo.add_arf_detector(
+        sim, "det1", colli_type, size, spacing, pth
     )
-    proj1 = add_intevo_digitizer_lu177_v3(
-        sim, crystal1, f"digitizer1", spectrum_channel=False
-    )
-    head2, colli2, crystal2 = intevo.add_spect_head(
-        sim, "spect2", collimator_type=colli_type, debug=sim.visu == True
-    )
-    proj2 = add_intevo_digitizer_lu177_v3(
-        sim, crystal2, f"digitizer2", spectrum_channel=False
+    det_plane2, arf2 = intevo.add_arf_detector(
+        sim, "det2", colli_type, size, spacing, pth
     )
 
     # output names
-    proj1.output_filename = "projection_1.mhd"
-    proj2.output_filename = "projection_2.mhd"
+    arf1.output_filename = "projection_1.mhd"
+    arf2.output_filename = "projection_2.mhd"
 
-    # for visualisation debug
-    # table = add_fake_table(sim)
-    # table.translation = [0, 320, 0]
-
-    # rotate
-    intevo.rotate_gantry(head1, radius, 0)
-    intevo.rotate_gantry(head2, radius, 180)
+    # compute the gantry rotations
+    intevo.rotate_gantry(det_plane1, radius, 0)
+    intevo.rotate_gantry(det_plane2, radius, 180)
 
     # source for test
-    add_source_point_test(sim, rad, (head1, head2), activity, angle_tolerance)
+    add_source_point_test(sim, rad, (det_plane1, det_plane2), activity, angle_tolerance)
+
+    # FF
+    ff = sim.add_actor("FreeFlightActor", "ff")
+    ff.attached_to = "world"
+    ff.particles = "gamma"
 
     # go
     sim.run()
