@@ -44,7 +44,7 @@ def go():
     # set the two spect heads
     spacing = [4.7951998710632 * mm / 2, 4.7951998710632 * mm / 2]
     size = [128 * 2, 128 * 2]
-    pth = Path("pth") / "intevo_lu177_v3.pth"
+    pth = Path("pth") / "intevo_lu177_v3_v036.pth"
     det_plane1, arf1 = intevo.add_arf_detector(
         sim, "det1", colli_type, size, spacing, pth
     )

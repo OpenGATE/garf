@@ -12,10 +12,10 @@
     "L": 3,
 
     "#": "Learning rate",
-    "learning_rate": 0.00001,
+    "learning_rate": 0.0001,
 
     "#": "Max nb of epoch (iteration)",
-    "epoch_max": 100,
+    "epoch_max": 200,
     "#epoch_max": 4,
 
     "#": "Nb of epoch without progress to stop earlier",

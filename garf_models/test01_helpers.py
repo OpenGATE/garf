@@ -49,8 +49,8 @@ def add_vox_source(sim, rad, activity, data_path):
     source.particle = "gamma"
     _, volumes = nemaiec.get_default_sphere_centers_and_volumes()
     print(f"Volumes are {volumes}")
-    source.activity = activity * np.array(volumes).sum()
-    print(f"Total activity is {source.activity / Bq}")
+    source.activity = activity * np.array(volumes).sum() / sim.number_of_threads
+    print(f"Total activity is {(source.activity*sim.number_of_threads) / Bq}")
     return source
 
 
