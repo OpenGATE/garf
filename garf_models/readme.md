@@ -5,8 +5,8 @@
 
 - idem test01 with voxelized IEC phantom and voxelized source
 - ref done 2e4 Bq
-- no AA for arf (need scatter)
-- AA for ff, direct only
+- no AA for arf (need scatter) -> fit ok
+- AA for ff, direct only -> fit not ok because of scatter
 
 
 ## test01
@@ -14,7 +14,7 @@
 - Intevo
 - Lu177, melp
 - no phantom (in Air)
-- 2 point-sources + AA
+- 2 point sources + AA
 - good one is intevo_lu177_v3_v036.pth
 
 ## garf generation

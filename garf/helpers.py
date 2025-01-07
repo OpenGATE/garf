@@ -3,6 +3,8 @@ import numpy as np
 import os
 import uproot
 import torch
+import SimpleITK as sitk
+import matplotlib.pyplot as plt
 
 
 def load_training_dataset(filename):
@@ -225,3 +227,61 @@ def get_gpu_device(gpu_mode):
         return get_gpu_device("cpu")
 
     return current_gpu_mode, current_gpu_device
+
+
+def plot_spect_projection(
+    image1_mhd, image2_mhd, scaling=1, islice=None, wslice=1, win_labels=None
+):
+    # Load image
+    img_ref = sitk.ReadImage(image1_mhd)
+    img = sitk.ReadImage(image2_mhd)
+    scaling = float(scaling)
+    wslice = int(wslice)
+
+    # slice
+    if islice is None:
+        islice = int(img.GetSize()[0] / 2)
+    else:
+        islice = int(islice)
+
+    # Get the pixels values as np array
+    data_ref = sitk.GetArrayFromImage(img_ref).astype(float)
+    data = sitk.GetArrayFromImage(img).astype(float)
+
+    # Scale data to the ref nb of particles
+    data = data * scaling
+
+    # Profiles
+    p_ref = np.mean(data_ref[:, islice - wslice : islice + wslice - 1, :], axis=1)
+    p = np.mean(data[:, islice - wslice : islice + wslice - 1, :], axis=1)
+    x = np.arange(0, data.shape[1], 1)
+
+    # nb of energy windows
+    nb_ene = len(data)
+    if win_labels is None:
+        win_labels = [f"win {i}" for i in np.arange(nb_ene)]
+
+    # Criterion1: global counts in every windows
+    s_ref = np.sum(data_ref, axis=(1, 2))
+    s = np.sum(data, axis=(1, 2))
+    ratio = (s - s_ref) / s_ref * 100.0
+
+    # figure
+    fig, ax = plt.subplots(ncols=nb_ene, nrows=1, figsize=(35, 5))
+    fs = 12
+    plt.rc("font", size=fs)
+    for i in range(nb_ene):
+        a = ax[i]
+        a.plot(x, p_ref[i], "g", label="Analog", alpha=0.5, linewidth=2.0)
+        a.plot(x, p[i], "k--", label="ARF", alpha=0.9, linewidth=1.0)
+        a.set_title(win_labels[i], fontsize=fs + 5)
+        a.legend(loc="best")
+        a.tick_params(labelsize=fs)
+        i += 1
+
+    plt.suptitle(
+        f"Slice ={islice}, w={wslice} {image1_mhd} {image2_mhd} global diff = {ratio}"
+    )
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.85)
+    return plt
