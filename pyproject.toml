@@ -17,7 +17,7 @@ find = { }  # Scanning implicit namespaces is active by default
 
 [project]
 name = "garf"
-version = "2.9"
+version = "2.10"
 dynamic = ["readme"]
 authors = [{ name = "David Sarrut", email = "david.sarrut@creatis.insa-lyon.fr" }]
 description = "Utility tools for GATE ARF simulations"
