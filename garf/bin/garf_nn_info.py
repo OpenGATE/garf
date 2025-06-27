@@ -23,7 +23,9 @@ def garf_nn_info(filename_pth):
 
     loss_values = p["loss_values"]
     x = np.arange(0, len(loss_values))
-    plt.plot(x, loss_values)
+    # plt.plot(x, loss_values)
+    # remove first and last
+    plt.plot(x[1:-1], loss_values[1:-1])
     plt.tight_layout()
     plt.show()
 
