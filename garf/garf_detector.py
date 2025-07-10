@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-import numpy as np
-import torch
 from torch import Tensor
 import itk
-from .garf_model import Net_v1
+from .garf_model import *
 from .helpers import get_gpu_device
 
 
@@ -40,12 +38,23 @@ def load_nn(filename, verbose=True, gpu_mode="auto"):
         "Best epoch = {}".format(nn["optim"]["data"][best_epoch_eval]["epoch"])
     )
 
+    model_type = "Net_v1"
+    if "model_type" in model_data:
+        model_type = model_data["model_type"]
+
     # prepare the model
     state = nn["optim"]["model_state"][best_epoch_eval]
     H = model_data["H"]
     n_ene_win = model_data["n_ene_win"]
     L = model_data["L"]
-    model = Net_v1(H, L, n_ene_win)
+
+    if model_type == "Net_v1":
+        model = Net_v1(H, L, n_ene_win)
+    if model_type == "ResNet_v2":
+        model = ResNet_v2(H, L, n_ene_win)
+    if model_type == "MultiTask_v3":
+        model = MultiTask_v3(H, L, n_ene_win)
+
     model.load_state_dict(state)
     return nn, model
 
@@ -62,6 +71,7 @@ class GarfDetector:
         self.initial_plane_rotation = None
         self.radius = None
         self.hit_slice_flag = False
+        self.plane_axis = None
 
         # computed
         self.plane_rotations = None
@@ -138,6 +148,10 @@ class GarfDetector:
                 f'Error in GARF, no value "rr" for Russian Roulette found in {self.model_data}'
             )
             exit(-1)
+
+        # plane axis
+        if self.plane_axis is None:
+            self.plane_axis = [0, 1, 2]
 
         # planes
         self.initialize_detector_plane_rotations(gantry_rotations)
@@ -425,6 +439,7 @@ class GarfDetector:
 class GarfDetectorPlane:
     def __init__(self, garf_detector, center, rotation):
         self.garf_detector = garf_detector
+        self.plane_axis = self.garf_detector.plane_axis
         self.M = self.rotation_to_tensor(rotation)
         self.Mt = self.M.t()
         self.center = center
@@ -486,7 +501,6 @@ class GarfDetectorPlane:
 
         # two first coord
         pos_xy_rot = pos_xyz_rot[:, 0:2]
-        dir_xy_rot = dir_xyz_rot[:, 0:2]
 
         s = self.garf_detector.image_size_mm
         indexes_to_keep = torch.where(
@@ -495,11 +509,13 @@ class GarfDetectorPlane:
         )[0]
 
         # convert direction into theta/phi
-        # theta is acos(dy)
-        # phi is acos(dx)
-        nb = len(dir_xy_rot)
-        theta = torch.rad2deg(torch.arccos(dir_xy_rot[:, 1])).reshape((nb, 1))
-        phi = torch.rad2deg(torch.arccos(dir_xy_rot[:, 0])).reshape((nb, 1))
+        nb = len(dir_xyz_rot)
+        d_x_plane = dir_xyz_rot[:, self.plane_axis[0]]
+        d_y_plane = dir_xyz_rot[:, self.plane_axis[1]]
+        d_z_plane = dir_xyz_rot[:, self.plane_axis[2]]
+        theta = torch.rad2deg(torch.arccos(d_z_plane)).reshape((nb, 1))
+        phi = torch.rad2deg(torch.arctan2(d_y_plane, d_x_plane)).reshape((nb, 1))
+
         angles = torch.concat((theta, phi), dim=1)
 
         batch = torch.concat(
@@ -595,14 +611,88 @@ def nn_predict_numpy(model, model_data, x):
     # predict values
     vy_pred = model(vx)
 
+    # Apply correction to the logits BEFORE softmax
+    # Adding log(rr) to a logit is equivalent to multiplying its
+    # probability by rr after exponentiation.
+    if rr > 1:
+        vy_pred[:, 0] += np.log(rr)
+
     # convert to numpy and normalize probabilities
     y_pred = normalize_logproba(vy_pred.data)
-    y_pred = normalize_proba_with_russian_roulette(y_pred, 0, rr)
+    # y_pred = normalize_proba_with_russian_roulette(y_pred, 0, rr)
     y_pred = y_pred.cpu().numpy()
     y_pred = y_pred.astype(np.float64)
 
     # return
     return y_pred
+
+
+def nn_predict_numpy_multitask(model, model_data, x):
+    """
+    Apply the Multi-Task NN to predict y from x.
+    This version correctly handles the two-headed output.
+    """
+    # Apply input normalization (same as before)
+    x_mean = model_data["x_mean"]
+    x_std = model_data["x_std"]
+    x = (x - x_mean) / x_std
+
+    # Set device and model (same as before)
+    device = model_data.get("current_gpu_device", torch.device("cpu"))
+    model.to(device)
+    model.eval()  # Set model to evaluation mode
+
+    # Torch encapsulation
+    x = x.astype("float32")
+    vx = torch.from_numpy(x).to(device)
+
+    # --- New Multi-Task Prediction Logic ---
+
+    with torch.no_grad():  # Disable gradient calculation for inference
+        # 1. Get the two outputs from the model
+        acceptance_logit, energy_logits = model(vx)
+
+        # 2. Calculate probability of detection using the sigmoid function
+        # This is P(detection)
+        p_acceptance = torch.sigmoid(acceptance_logit)
+
+        # 3. Calculate conditional probabilities for each energy window using softmax
+        # This is P(window k | detected)
+        p_energy_windows = torch.softmax(energy_logits, dim=1)
+
+        # 4. Combine the probabilities to get the final prediction
+        p_acceptance = p_acceptance.cpu().numpy()
+        p_energy_windows = p_energy_windows.cpu().numpy()
+
+        # The number of final windows is 1 (for non-detected) + number of energy heads
+        n_samples = x.shape[0]
+        n_total_windows = p_energy_windows.shape[1] + 1
+        y_pred = np.zeros((n_samples, n_total_windows), dtype=np.float64)
+
+        # Probability of non-detection (window 0) is 1 - P(detection)
+        y_pred[:, 0] = 1.0 - p_acceptance.flatten()
+
+        # Probability of a given detected window k is P(detection) * P(window k | detected)
+        for k in range(p_energy_windows.shape[1]):
+            y_pred[:, k + 1] = p_acceptance.flatten() * p_energy_windows[:, k]
+
+    return y_pred
+
+
+def xgb_predict_numpy(model, model_data, x):
+    """
+    Apply a trained XGBoost model to predict y from x.
+    """
+    # Apply the same normalization used during training
+    x_mean = model_data["x_mean"]
+    x_std = model_data["x_std"]
+    x_normalized = (x - x_mean) / x_std
+
+    # Predict probabilities directly; no RR correction needed
+    # as the model was trained with weighted loss.
+    y_pred = model.predict_proba(x_normalized)
+
+    return y_pred.astype(np.float64)
 
 
 def compute_angle_offset_torch(angles, length):
@@ -711,7 +801,7 @@ def image_from_coordinates_add_numpy(img, u, v, w_pred, hit_slice=False):
             img[i, uv16Bins[chx > tiny, 0], uv16Bins[chx > tiny, 1]] += chx[chx > tiny]
 
 
-def arf_plane_intersection(batch, plane, image_plane_size_mm):
+def arf_plane_intersection(batch, plane, image_plane_size_mm, plane_axis):
     """
     Project the x points (Ekine X Y Z dX dY dZ)
     on the image plane defined by plane_U, plane_V, plane_center, plane_normal
@@ -792,14 +882,18 @@ def arf_plane_intersection(batch, plane, image_plane_size_mm):
     # two first coord of dir
     dx = dir_xyz_rot[:, 0]
     dy = dir_xyz_rot[:, 1]
+    dz = dir_xyz_rot[:, 2]
 
     # FIXME -> clip arcos -1;1 ?
 
     # convert direction into theta/phi
-    # theta is acos(dy)
-    # phi is acos(dx)
-    theta = np.degrees(np.arccos(dy)).reshape((nb, 1))
-    phi = np.degrees(np.arccos(dx)).reshape((nb, 1))
+    dirs = np.stack((dx, dy, dz), axis=-1)
+    d_x_plane = dirs[:, plane_axis[0]]
+    d_y_plane = dirs[:, plane_axis[1]]
+    d_z_plane = dirs[:, plane_axis[2]]
+    theta = np.degrees(np.arccos(d_z_plane)).reshape((nb, 1))
+    phi = np.degrees(np.arctan2(d_y_plane, d_x_plane)).reshape((nb, 1))
+
     y = np.concatenate((y, theta), axis=1)
     y = np.concatenate((y, phi), axis=1)
 
@@ -863,7 +957,7 @@ def arf_from_points_to_image_counts_OLD(
     return u, v, w_pred
 
 
-def arf_from_points_to_image_counts(
+def arf_from_points_to_image_counts_OLD2(
     projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy, 1 weight
     model,  # ARF neural network model
     model_data,  # associated model data
@@ -915,6 +1009,145 @@ def arf_from_points_to_image_counts(
     u = coord[:, 1]
 
     # remove points outside the image
+    u, v, w_pred = remove_out_of_image_boundaries_numpy(
+        u, v, w_pred, image_plane_size_pixel
+    )
+
+    return u, v, w_pred
+
+
+def arf_from_points_to_image_counts_OLD3(
+    projected_batch,  # Now 6D/7D: pos_x, pos_y, dir_x, dir_y, dir_z, E, [weight]
+    model,
+    model_data,
+    distance_to_crystal,
+    image_plane_size_mm,
+    image_plane_size_pixel,
+    image_plane_spacing,
+):
+    """
+    Input: position, direction on the detector plane, energy.
+    This version performs a correct geometric projection.
+    """
+
+    # --- 1. Predict scatter probabilities with the NN ---
+
+    # Get directions (dx, dy, dz) and energy for NN input
+    dirs = projected_batch[:, 2:5]
+    energy = projected_batch[:, 5:6]
+
+    # Calculate angles internally for the NN
+    theta = np.degrees(np.arccos(dirs[:, 2]))
+    phi = np.degrees(np.arctan2(dirs[:, 1], dirs[:, 0]))
+
+    # Assemble NN input (theta, phi, E) and predict
+    ax = np.column_stack((theta, phi, energy))
+    w_pred = nn_predict_numpy(model, model_data, ax)
+
+    # Apply particle weights if they exist
+    if projected_batch.shape[1] == 7:
+        weights = projected_batch[:, 6]
+        w_pred = w_pred * weights[:, np.newaxis]
+
+    # --- 2. Calculate final position on the crystal ---
+
+    # Get initial position (px, py)
+    cx = projected_batch[:, 0:2]
+
+    # Correctly project the trajectory over distance_to_crystal
+    dir_z = dirs[:, 2]
+    # Handle particles traveling parallel to the plane to avoid division by zero
+    mask = np.abs(dir_z) > 1e-9
+    offset = np.zeros_like(cx)
+    offset[mask, 0] = distance_to_crystal * (dirs[mask, 0] / dir_z[mask])  # d * dx/dz
+    offset[mask, 1] = distance_to_crystal * (dirs[mask, 1] / dir_z[mask])  # d * dy/dz
+
+    # The final position on the crystal plane
+    final_pos = cx + offset
+
+    # --- 3. Convert coordinates to image pixels ---
+
+    # Convert mm coordinates to pixel indices
+    coord = (
+        final_pos + image_plane_size_mm / 2 - image_plane_spacing / 2
+    ) / image_plane_spacing
+    coord = np.around(coord).astype(int)
+
+    # Separate into u, v coordinates
+    v = coord[:, 0]
+    u = coord[:, 1]
+
+    # Remove points that fall outside the image dimensions
+    u, v, w_pred = remove_out_of_image_boundaries_numpy(
+        u, v, w_pred, image_plane_size_pixel
+    )
+
+    return u, v, w_pred
+
+
+def arf_from_points_to_image_counts(
+    projected_batch,
+    model,
+    model_data,
+    distance_to_crystal,
+    image_plane_size_mm,
+    image_plane_size_pixel,
+    image_plane_spacing,
+):
+    """
+    Input: position, direction on the detector plane, energy.
+    This version is model-agnostic (PyTorch or XGBoost).
+    """
+
+    # --- 1. Predict scatter probabilities with the correct model ---
+
+    # Get directions and energy for model input
+    dirs = projected_batch[:, 2:5]
+    energy = projected_batch[:, 5:6]
+
+    # Calculate angles from directions
+    theta = np.degrees(np.arccos(np.clip(dirs[:, 2], -1, 1)))
+    phi = np.degrees(np.arctan2(dirs[:, 1], dirs[:, 0]))
+
+    # Assemble input (theta, phi, E)
+    ax = np.column_stack((theta, phi, energy))
+
+    # Conditionally call the correct prediction function
+    model_type = model_data.get("model_type", "Net_v1")
+    if model_type == "xgboost":
+        w_pred = xgb_predict_numpy(model, model_data, ax)
+    elif model_type == "MultiTask_v3":
+        w_pred = nn_predict_numpy_multitask(model, model_data, ax)
+    else:
+        w_pred = nn_predict_numpy(model, model_data, ax)
+
+    # Apply particle weights from the simulation if they exist
+    if projected_batch.shape[1] == 7:
+        weights = projected_batch[:, 6]
+        w_pred = w_pred * weights[:, np.newaxis]
+
+    # --- The rest of the function (geometric projection) remains the same ---
+
+    # Get initial position (px, py)
+    cx = projected_batch[:, 0:2]
+
+    # Correctly project the trajectory over distance_to_crystal
+    dir_z = dirs[:, 2]
+    mask = np.abs(dir_z) > 1e-9
+    offset = np.zeros_like(cx)
+    offset[mask, 0] = distance_to_crystal * (dirs[mask, 0] / dir_z[mask])
+    offset[mask, 1] = distance_to_crystal * (dirs[mask, 1] / dir_z[mask])
+    final_pos = cx + offset
+
+    # Convert mm coordinates to pixel indices
+    coord = (
+        final_pos + image_plane_size_mm / 2 - image_plane_spacing / 2
+    ) / image_plane_spacing
+    coord = np.around(coord).astype(int)
+
+    # Separate into u, v coordinates and remove out-of-bounds points
+    v = coord[:, 0]
+    u = coord[:, 1]
     u, v, w_pred = remove_out_of_image_boundaries_numpy(
         u, v, w_pred, image_plane_size_pixel
     )
