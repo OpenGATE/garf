@@ -16,7 +16,9 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @click.argument("data")
 @click.argument("output")
 @click.option("--progress-bar/--no-progress-bar", default=True)
-def garf_train(param, data, output, progress_bar):
+@click.option("--rr", default=None, help="RR value (overwrite the one in the param file)")
+@click.option("--epoch", default=None, help="Nb of epoch (overwrite the one in the param file)")
+def garf_train(param, data, output, rr, epoch, progress_bar):
     """
     \b
     Train a ARF-nn (neural network) from a training dataset.
@@ -33,6 +35,14 @@ def garf_train(param, data, output, progress_bar):
     param_file = open(param_filename).read()
     params = json.loads(param_file)
     params["progress_bar"] = progress_bar
+
+    # RR ?
+    if rr is not None:
+        params["RR"] = float(rr)
+
+    # epoch ?
+    if epoch is not None:
+        params["epoch_max"] = int(epoch)
 
     # Print info
     print("Training dataset", data_filename)
