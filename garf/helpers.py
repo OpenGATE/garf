@@ -45,7 +45,7 @@ def load_training_dataset(filename):
     return data, theta, phi, E, w
 
 
-def print_training_dataset_info(data, rr=40):
+def print_training_dataset_info(data, rr):
     """
     Print training dataset information
     """
