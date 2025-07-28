@@ -25,7 +25,7 @@ class Net_v1(nn.Module):
     def __init__(self, H, L, n_ene_win):
         super(Net_v1, self).__init__()
         # Linear include Bias=True by default
-        self.input_layer = nn.Linear(3, H)
+        self.fc1 = nn.Linear(3, H)
         self.L = L
         self.fcts = nn.ModuleList()
         for i in range(L):
@@ -33,7 +33,7 @@ class Net_v1(nn.Module):
         self.fc3 = nn.Linear(H, n_ene_win)
 
     def forward(self, X):
-        X = self.input_layer(X)  # first layer
+        X = self.fc1(X)  # first layer
         X = torch.clamp(X, min=0)  # relu
         for i in range(self.L):
             X = self.fcts[i](X)  # hidden layers
@@ -69,7 +69,7 @@ class ResNet_v2(nn.Module):
     def __init__(self, H, L, n_ene_win):
         super().__init__()
         # Initial layer to project input from 3 dimensions to H dimensions
-        self.input_layer = nn.Linear(3, H)
+        self.fc1 = nn.Linear(3, H)
 
         # A series of residual blocks
         self.residual_layers = nn.ModuleList([ResidualBlock(H) for _ in range(L)])
@@ -79,7 +79,7 @@ class ResNet_v2(nn.Module):
 
     def forward(self, x):
         # Pass through the input layer and apply first activation
-        x = self.input_layer(x)
+        x = self.fc1(x)
         x = torch.clamp(x, min=0)  # ReLU
 
         # Pass through all the residual blocks
@@ -100,7 +100,7 @@ class MultiTask_v3(nn.Module):
     def __init__(self, H, L, n_energy_windows):
         super().__init__()
         # Shared backbone
-        self.input_layer = nn.Linear(3, H)
+        self.fc1 = nn.Linear(3, H)
         self.residual_layers = nn.ModuleList([ResidualBlock(H) for _ in range(L)])
 
         # Head 1: Predicts detection vs. non-detection (1 output logit)
@@ -116,7 +116,7 @@ class MultiTask_v3(nn.Module):
 
     def forward(self, x):
         # Pass through the shared backbone
-        x = self.input_layer(x)
+        x = self.fc1(x)
         x = torch.clamp(x, min=0)  # ReLU
         for layer in self.residual_layers:
             x = layer(x)
