@@ -49,6 +49,10 @@ def nn_prepare_data(x_train, y_train, params):
     model_data["x_std"] = x_std
     model_data["N"] = N
 
+    # this flag indicate that we use the new version of angle parametrisation
+    # (acos + atan2 instead of acos + acos)
+    model_data["angle_param"] = 'atan2'
+
     # copy param except comments
     for i in params:
         if not i[0] == "#":
@@ -387,7 +391,7 @@ def train_nn(x_train, y_train, params):
         for batch_idx, data in enumerate(train_loader2):
             x = data[:, 0:3]
             y = data[:, 3]
-            X = Tensor(x.to(model.input_layer.weight.dtype)).to(current_gpu_device)
+            X = Tensor(x.to(model.fc1.weight.dtype)).to(current_gpu_device)
             Y = Tensor(y).to(current_gpu_device).long()
 
             # Forward pass
