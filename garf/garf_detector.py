@@ -38,9 +38,17 @@ def load_nn(filename, verbose=True, gpu_mode="auto"):
         "Best epoch = {}".format(nn["optim"]["data"][best_epoch_eval]["epoch"])
     )
 
+    # which net type ?
     model_type = "Net_v1"
     if "model_type" in model_data:
         model_type = model_data["model_type"]
+
+    # which angle parametrisation ?
+    # old one = acos acos
+    # new one = acos atan2
+    angle_param = 'acos'
+    if 'angle_param' not in model_data:
+        model_data['angle_param'] = angle_param
 
     # prepare the model
     state = nn["optim"]["model_state"][best_epoch_eval]
@@ -264,7 +272,7 @@ class GarfDetector:
 
     def project_to_planes_torch(self, batch, projected_points):
         for i, detector_plane in enumerate(self.detector_planes):
-            projected_batch = detector_plane.plane_intersection(batch)
+            projected_batch = detector_plane.plane_intersection_torch(batch)
             self.build_image_from_projected_points_torch(projected_batch, i)
 
     def project_to_planes_numpy(self, batch, i, planes, projected_points, data_img):
@@ -459,7 +467,7 @@ class GarfDetectorPlane:
         t = t.to(self.garf_detector.current_gpu_device)
         return t
 
-    def plane_intersection(self, batch):
+    def plane_intersection_torch(self, batch):
         # See arf_plane_intersection
 
         # get energy, position and direction
@@ -515,6 +523,10 @@ class GarfDetectorPlane:
         d_z_plane = dir_xyz_rot[:, self.plane_axis[2]]
         theta = torch.rad2deg(torch.arccos(d_z_plane)).reshape((nb, 1))
         phi = torch.rad2deg(torch.arctan2(d_y_plane, d_x_plane)).reshape((nb, 1))
+
+        # FIXME previous angle parametrisation ?
+        #theta = torch.rad2deg(torch.arccos(dir_xy_rot[:, 1])).reshape((nb, 1))
+        #phi = torch.rad2deg(torch.arccos(dir_xy_rot[:, 0])).reshape((nb, 1))
 
         angles = torch.concat((theta, phi), dim=1)
 
@@ -704,28 +716,13 @@ def compute_angle_offset_torch(angles, length):
     cos_theta = torch.cos(angles_rad[:, 0])
     cos_phi = torch.cos(angles_rad[:, 1])
 
+    print('FIXME acos !! ')
+
     # see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
     tx = length * cos_phi
     # see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
     ty = length * cos_theta
     t = torch.column_stack((tx, ty))
-
-    return t
-
-
-def compute_angle_offset_numpy(angles, length):
-    """
-    compute the x,y offset according to the angle
-    """
-    angles_rad = np.deg2rad(angles)
-    cos_theta = np.cos(angles_rad[:, 0])
-    cos_phi = np.cos(angles_rad[:, 1])
-
-    #  see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
-    tx = length * cos_phi
-    #  see in Gate_NN_ARF_Actor, line "theta = acos(dir.y())/degree;"
-    ty = length * cos_theta
-    t = np.column_stack((tx, ty))
 
     return t
 
@@ -903,188 +900,6 @@ def arf_plane_intersection(batch, plane, image_plane_size_mm, plane_axis):
     return batch
 
 
-def arf_from_points_to_image_counts_OLD(
-    projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy
-    model,  # ARF neural network model
-    model_data,  # associated model data
-    distance_to_crystal,  # from detection plane to crystal center
-    image_plane_size_mm,  # image plane in mm
-    image_plane_size_pixel,  # image plane in pixel
-    image_plane_spacing,
-):  # image plane spacing
-    """
-    Input : position, direction on the detector plane, energy
-    Compute
-    - garf.nn_predict
-    - garf.compute_angle_offset
-    - garf.remove_out_of_image_boundaries2
-
-    Used in 1) GarfDetector class and 2) gate ARFActor
-
-    """
-
-    # get the two angles and the energy
-    ax = projected_batch[:, 2:5]
-
-    # predict weights
-    w_pred = nn_predict_numpy(model, model_data, ax)
-
-    # Get the two first columns = points coordinates
-    cx = projected_batch[:, 0:2]
-
-    # Get the two next columns = angles
-    angles = projected_batch[:, 2:4]
-
-    # Take angle into account: consider position at collimator + half crystal
-    t = compute_angle_offset_numpy(angles, distance_to_crystal)
-    cx = cx + t
-
-    # convert coord to pixel
-    coord = (
-        cx + image_plane_size_mm / 2 - image_plane_spacing / 2
-    ) / image_plane_spacing
-    coord = np.around(coord).astype(int)
-
-    # why vu and not uv ?
-    v = coord[:, 0]
-    u = coord[:, 1]
-
-    # remove points outside the image
-    u, v, w_pred = remove_out_of_image_boundaries_numpy(
-        u, v, w_pred, image_plane_size_pixel
-    )
-
-    return u, v, w_pred
-
-
-def arf_from_points_to_image_counts_OLD2(
-    projected_batch,  # 5D: 2 plane coordinates, 2 angles, 1 energy, 1 weight
-    model,  # ARF neural network model
-    model_data,  # associated model data
-    distance_to_crystal,  # from detection plane to crystal center
-    image_plane_size_mm,  # image plane in mm
-    image_plane_size_pixel,  # image plane in pixel
-    image_plane_spacing,
-):  # image plane spacing
-    """
-    Input : position, direction on the detector plane, energy
-    Compute
-    - garf.nn_predict
-    - garf.compute_angle_offset
-    - garf.remove_out_of_image_boundaries2
-
-    Used in 1) GarfDetector class and 2) gate ARFActor
-
-    """
-
-    # get the two angles and the energy
-    ax = projected_batch[:, 2:5]
-
-    # predict weights
-    w_pred = nn_predict_numpy(model, model_data, ax)
-
-    # particle weight ?
-    if projected_batch.shape[1] == 6:
-        weights = projected_batch[:, 5]
-        w_pred = w_pred * weights[:, np.newaxis]
-
-    # Get the two first columns = points coordinates
-    cx = projected_batch[:, 0:2]
-
-    # Get the two next columns = angles
-    angles = projected_batch[:, 2:4]
-
-    # Take angle into account: consider position at collimator + half crystal
-    t = compute_angle_offset_numpy(angles, distance_to_crystal)
-    cx = cx + t
-
-    # convert coord to pixel
-    coord = (
-        cx + image_plane_size_mm / 2 - image_plane_spacing / 2
-    ) / image_plane_spacing
-    coord = np.around(coord).astype(int)
-
-    # why vu and not uv ?
-    v = coord[:, 0]
-    u = coord[:, 1]
-
-    # remove points outside the image
-    u, v, w_pred = remove_out_of_image_boundaries_numpy(
-        u, v, w_pred, image_plane_size_pixel
-    )
-
-    return u, v, w_pred
-
-
-def arf_from_points_to_image_counts_OLD3(
-    projected_batch,  # Now 6D/7D: pos_x, pos_y, dir_x, dir_y, dir_z, E, [weight]
-    model,
-    model_data,
-    distance_to_crystal,
-    image_plane_size_mm,
-    image_plane_size_pixel,
-    image_plane_spacing,
-):
-    """
-    Input: position, direction on the detector plane, energy.
-    This version performs a correct geometric projection.
-    """
-
-    # --- 1. Predict scatter probabilities with the NN ---
-
-    # Get directions (dx, dy, dz) and energy for NN input
-    dirs = projected_batch[:, 2:5]
-    energy = projected_batch[:, 5:6]
-
-    # Calculate angles internally for the NN
-    theta = np.degrees(np.arccos(dirs[:, 2]))
-    phi = np.degrees(np.arctan2(dirs[:, 1], dirs[:, 0]))
-
-    # Assemble NN input (theta, phi, E) and predict
-    ax = np.column_stack((theta, phi, energy))
-    w_pred = nn_predict_numpy(model, model_data, ax)
-
-    # Apply particle weights if they exist
-    if projected_batch.shape[1] == 7:
-        weights = projected_batch[:, 6]
-        w_pred = w_pred * weights[:, np.newaxis]
-
-    # --- 2. Calculate final position on the crystal ---
-
-    # Get initial position (px, py)
-    cx = projected_batch[:, 0:2]
-
-    # Correctly project the trajectory over distance_to_crystal
-    dir_z = dirs[:, 2]
-    # Handle particles traveling parallel to the plane to avoid division by zero
-    mask = np.abs(dir_z) > 1e-9
-    offset = np.zeros_like(cx)
-    offset[mask, 0] = distance_to_crystal * (dirs[mask, 0] / dir_z[mask])  # d * dx/dz
-    offset[mask, 1] = distance_to_crystal * (dirs[mask, 1] / dir_z[mask])  # d * dy/dz
-
-    # The final position on the crystal plane
-    final_pos = cx + offset
-
-    # --- 3. Convert coordinates to image pixels ---
-
-    # Convert mm coordinates to pixel indices
-    coord = (
-        final_pos + image_plane_size_mm / 2 - image_plane_spacing / 2
-    ) / image_plane_spacing
-    coord = np.around(coord).astype(int)
-
-    # Separate into u, v coordinates
-    v = coord[:, 0]
-    u = coord[:, 1]
-
-    # Remove points that fall outside the image dimensions
-    u, v, w_pred = remove_out_of_image_boundaries_numpy(
-        u, v, w_pred, image_plane_size_pixel
-    )
-
-    return u, v, w_pred
-
-
 def arf_from_points_to_image_counts(
     projected_batch,
     model,
@@ -1106,8 +921,12 @@ def arf_from_points_to_image_counts(
     energy = projected_batch[:, 5:6]
 
     # Calculate angles from directions
-    theta = np.degrees(np.arccos(np.clip(dirs[:, 2], -1, 1)))
-    phi = np.degrees(np.arctan2(dirs[:, 1], dirs[:, 0]))
+    if model_data['angle_param'] == 'atan2':
+        theta = np.degrees(np.arccos(np.clip(dirs[:, 2], -1, 1)))
+        phi = np.degrees(np.arctan2(dirs[:, 1], dirs[:, 0]))
+    else:
+        theta = np.degrees(np.arccos(dirs[:, 1]))
+        phi = np.degrees(np.arccos(dirs[:, 0]))
 
     # Assemble input (theta, phi, E)
     ax = np.column_stack((theta, phi, energy))
