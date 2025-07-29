@@ -46,9 +46,9 @@ def load_nn(filename, verbose=True, gpu_mode="auto"):
     # which angle parametrisation ?
     # old one = acos acos
     # new one = acos atan2
-    angle_param = 'acos'
-    if 'angle_param' not in model_data:
-        model_data['angle_param'] = angle_param
+    angle_param = "acos"
+    if "angle_param" not in model_data:
+        model_data["angle_param"] = angle_param
 
     # prepare the model
     state = nn["optim"]["model_state"][best_epoch_eval]
@@ -525,8 +525,8 @@ class GarfDetectorPlane:
         phi = torch.rad2deg(torch.arctan2(d_y_plane, d_x_plane)).reshape((nb, 1))
 
         # FIXME previous angle parametrisation ?
-        #theta = torch.rad2deg(torch.arccos(dir_xy_rot[:, 1])).reshape((nb, 1))
-        #phi = torch.rad2deg(torch.arccos(dir_xy_rot[:, 0])).reshape((nb, 1))
+        # theta = torch.rad2deg(torch.arccos(dir_xy_rot[:, 1])).reshape((nb, 1))
+        # phi = torch.rad2deg(torch.arccos(dir_xy_rot[:, 0])).reshape((nb, 1))
 
         angles = torch.concat((theta, phi), dim=1)
 
@@ -540,9 +540,6 @@ class GarfDetectorPlane:
             dim=1,
         )
         return batch
-
-
-# noinspection PyUnreachableCode
 
 
 def normalize_logproba(x):
@@ -609,7 +606,7 @@ def nn_predict_numpy(model, model_data, x):
     # apply input model normalisation
     x = (x - x_mean) / x_std
 
-    # gpu ? (usually not)
+    # gpu?
     if "current_gpu_device" not in model_data:
         current_gpu_mode, current_gpu_device = get_gpu_device(gpu_mode="auto")
         model_data["current_gpu_device"] = current_gpu_device
@@ -716,7 +713,7 @@ def compute_angle_offset_torch(angles, length):
     cos_theta = torch.cos(angles_rad[:, 0])
     cos_phi = torch.cos(angles_rad[:, 1])
 
-    print('FIXME acos !! ')
+    print("FIXME acos !! ")
 
     # see in Gate_NN_ARF_Actor, line "phi = acos(dir.x())/degree;"
     tx = length * cos_phi
@@ -914,14 +911,12 @@ def arf_from_points_to_image_counts(
     This version is model-agnostic (PyTorch or XGBoost).
     """
 
-    # --- 1. Predict scatter probabilities with the correct model ---
-
     # Get directions and energy for model input
     dirs = projected_batch[:, 2:5]
     energy = projected_batch[:, 5:6]
 
     # Calculate angles from directions
-    if model_data['angle_param'] == 'atan2':
+    if model_data["angle_param"] == "atan2":
         theta = np.degrees(np.arccos(np.clip(dirs[:, 2], -1, 1)))
         phi = np.degrees(np.arctan2(dirs[:, 1], dirs[:, 0]))
     else:
@@ -944,8 +939,6 @@ def arf_from_points_to_image_counts(
     if projected_batch.shape[1] == 7:
         weights = projected_batch[:, 6]
         w_pred = w_pred * weights[:, np.newaxis]
-
-    # --- The rest of the function (geometric projection) remains the same ---
 
     # Get initial position (px, py)
     cx = projected_batch[:, 0:2]
