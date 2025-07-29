@@ -74,7 +74,7 @@ def nn_get_optimiser(model_data, model):
 
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, "min", verbose=False, patience=50
+        optimizer, "min", patience=50
     )
 
     return optimizer, scheduler
@@ -350,7 +350,7 @@ def train_nn(x_train, y_train, params):
     )
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, "min", verbose=False, patience=3
+        optimizer, "min", patience=3
     )
 
     # Main loop initialization
