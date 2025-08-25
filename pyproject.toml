@@ -39,6 +39,7 @@ dependencies = [
 [project.scripts]
 garf_compare_image_profile = "garf.bin.garf_compare_image_profile:garf_compare_image_profile"
 garf_plot_training_dataset = "garf.bin.garf_plot_training_dataset:garf_plot_training_dataset"
+garf_plot_training_dataset2 = "garf.bin.garf_plot_training_dataset:garf_plot_training_dataset2"
 garf_plot_test_dataset = "garf.bin.garf_plot_test_dataset:garf_plot_training_dataset"
 garf_train = "garf.bin.garf_train:garf_train"
 garf_nn_info = "garf.bin.garf_nn_info:garf_nn_info"
