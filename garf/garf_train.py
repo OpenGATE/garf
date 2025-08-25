@@ -51,7 +51,7 @@ def nn_prepare_data(x_train, y_train, params):
 
     # this flag indicate that we use the new version of angle parametrisation
     # (acos + atan2 instead of acos + acos)
-    model_data["angle_param"] = 'atan2'
+    model_data["angle_param"] = "atan2"
 
     # copy param except comments
     for i in params:
@@ -349,9 +349,7 @@ def train_nn(x_train, y_train, params):
         weight_decay=1e-4,
     )
     # decreasing learning_rate
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, "min", patience=3
-    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=3)
 
     # Main loop initialization
     epoch_max = model_data["epoch_max"]

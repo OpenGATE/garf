@@ -16,8 +16,12 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @click.argument("data")
 @click.argument("output")
 @click.option("--progress-bar/--no-progress-bar", default=True)
-@click.option("--rr", default=None, help="RR value (overwrite the one in the param file)")
-@click.option("--epoch", default=None, help="Nb of epoch (overwrite the one in the param file)")
+@click.option(
+    "--rr", default=None, help="RR value (overwrite the one in the param file)"
+)
+@click.option(
+    "--epoch", default=None, help="Nb of epoch (overwrite the one in the param file)"
+)
 def garf_train(param, data, output, rr, epoch, progress_bar):
     """
     \b

@@ -39,7 +39,7 @@ def garf_train_xgboost(json_params_file, data_file, output_model_file):
     print(f"Loading parameters from '{json_params_file}'")
     with open(json_params_file) as f:
         params = json.load(f)
-    rr_factor = 500#params["RR"] FIXME
+    rr_factor = 500  # params["RR"] FIXME
     print(f"Russian Roulette factor found: {rr_factor}")
 
     # --- 2. Prepare Data and Metadata ---
