@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch import Tensor
 import copy
 from tqdm import tqdm
-from .garf_model import Net_v1
+from .garf_model import *
 from .helpers import get_gpu_device
 
 
@@ -49,6 +49,10 @@ def nn_prepare_data(x_train, y_train, params):
     model_data["x_std"] = x_std
     model_data["N"] = N
 
+    # this flag indicate that we use the new version of angle parametrisation
+    # (acos + atan2 instead of acos + acos)
+    model_data["angle_param"] = "atan2"
+
     # copy param except comments
     for i in params:
         if not i[0] == "#":
@@ -70,13 +74,13 @@ def nn_get_optimiser(model_data, model):
 
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, "min", verbose=False, patience=50
+        optimizer, "min", patience=50
     )
 
     return optimizer, scheduler
 
 
-def train_nn(x_train, y_train, params):
+def train_nn_OLD_CORRECT(x_train, y_train, params):
     """
     Train the ARF neural network.
 
@@ -258,4 +262,315 @@ def train_nn(x_train, y_train, params):
     model_data["best_epoch_index"] = best_epoch_index
     model_data["best_loss"] = best_loss
 
+    return nn
+
+
+def train_nn(x_train, y_train, params):
+    """
+    Train the ARF neural network.
+
+    x_train -- x samples (3 dimensions: theta, phi, E)
+    y_train -- output probabilities vector for N energy windows
+    params  -- dictionary of parameters and options
+
+    params contains:
+    - n_ene_win
+    - batch_size
+    - batch_per_epoch
+    - epoch_store_every
+    - H
+    - L
+    - epoch_max
+    - early_stopping
+    - gpu_mode : auto cpu gpu
+    """
+
+    # Initialization
+    x_train, y_train, model_data, N = nn_prepare_data(x_train, y_train, params)
+
+    # One-hot encoding
+    print("One-hot encoding")
+    y_vals, y_train = np.unique(y_train, return_inverse=True)
+    n_ene_win = len(y_vals)
+    print("Number of energy windows:", n_ene_win)
+    model_data["n_ene_win"] = n_ene_win
+
+    # Device type
+    current_gpu_mode, current_gpu_device = get_gpu_device(params["gpu_mode"])
+    model_data["current_gpu_mode"] = current_gpu_mode
+    print(f"Device GPU type is {current_gpu_mode}")
+
+    # Batch parameters
+    batch_size = model_data["batch_size"]
+    epoch_store_every = model_data["epoch_store_every"]
+
+    # DataLoader
+    print("Data loader batch_size", batch_size)
+    train_data2 = np.column_stack((x_train, y_train))
+    if current_gpu_mode == "mps":
+        print("With device mps (gpu), convert data to float32", train_data2.dtype)
+        train_data2 = train_data2.astype(np.float32)
+
+    train_loader2 = DataLoader(
+        train_data2,
+        batch_size=batch_size,
+        num_workers=8,
+        pin_memory=True,
+        # shuffle=True,  # if false ~20% faster, seems identical
+        shuffle=False,  # if false ~20% faster, seems identical
+        drop_last=True,
+    )
+
+    # Create the main NN
+    H = model_data["H"]
+    L = model_data["L"]
+    rr_factor = params["RR"]
+
+    model_type = "Net_v1"
+    loss_function = F.cross_entropy
+    if "model_type" in model_data:
+        model_type = model_data["model_type"]
+    if model_type == "Net_v1":
+        model = Net_v1(H, L, n_ene_win)
+    if model_type == "ResNet_v2":
+        model = ResNet_v2(H, L, n_ene_win)
+    if model_type == "MultiTask_v3":
+        model = MultiTask_v3(H, L, n_ene_win)
+        l = MultiTask_v3_loss(y_train, rr_factor, current_gpu_device)
+        loss_function = l.loss
+
+    # Create the optimizer
+    # optimizer, scheduler = nn_get_optimiser(model_data, model)
+    learning_rate = model_data["learning_rate"]
+    # optimizer = torch.optim.RMSprop(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=1e-4,
+    )
+    # decreasing learning_rate
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=3)
+
+    # Main loop initialization
+    epoch_max = model_data["epoch_max"]
+    early_stopping = model_data["early_stopping"]
+    best_loss = np.Inf
+    best_epoch = 0
+    best_train_loss = np.Inf
+    loss_values = np.zeros(epoch_max + 1)
+
+    # Print parameters
+    print_nn_params(model_data)
+
+    # create main structures
+    nn = dict()
+    nn["model_data"] = model_data
+    nn["optim"] = dict()
+    nn["optim"]["model_state"] = []
+    nn["optim"]["data"] = []
+    previous_best = 9999
+    best_epoch_index = 0
+
+    # set the model to the device (cpu or gpu = cuda or mps)
+    model.to(current_gpu_device)
+
+    # Main loop
+    print("\nStart learning ...")
+    pbar = tqdm(total=epoch_max + 1, disable=not params["progress_bar"])
+    epoch = 0
+    stop = False
+    while (not stop) and (epoch < epoch_max):
+        # Train pass
+        model.train()
+        train_loss = 0.0
+        n_samples_processed = 0
+
+        # Loop on the data batch (batch_per_epoch times)
+        for batch_idx, data in enumerate(train_loader2):
+            x = data[:, 0:3]
+            y = data[:, 3]
+            X = Tensor(x.to(model.fc1.weight.dtype)).to(current_gpu_device)
+            Y = Tensor(y).to(current_gpu_device).long()
+
+            # Forward pass
+            Y_out = model(X)
+
+            # Compute expected loss
+            # combines log_softmax and nll_loss in a single function
+            loss = loss_function(Y_out, Y)
+
+            # Backward pass
+            loss.backward()
+
+            # Parameter update (gradient descent)
+            optimizer.step()
+            optimizer.zero_grad()
+            batch_size = X.shape[0]  # important with variable batch sizes
+            train_loss += loss.data.item() * batch_size
+            n_samples_processed += batch_size
+
+        # end for loop train_loader
+
+        # end of train
+        train_loss /= n_samples_processed
+        if train_loss < best_train_loss * (1 - 1e-4):
+            best_train_loss = train_loss
+        mean_loss = train_loss
+
+        loss_values[epoch] = mean_loss
+        if mean_loss < best_loss * (1 - 1e-4):
+            best_loss = mean_loss
+            best_epoch = epoch
+        elif epoch - best_epoch > early_stopping:
+            tqdm.write(
+                "{} epochs without improvement, early stop.".format(early_stopping)
+            )
+            stop = True
+
+        # scheduler for learning rate
+        scheduler.step(mean_loss)
+
+        # FIXME WRONG
+        # Check if need to print and store this epoch
+        if best_train_loss < previous_best:
+            tqdm.write("Epoch {} loss is {:.5f}".format(epoch, best_loss))
+            previous_best = best_train_loss
+
+        if (
+            (epoch != 0 and epoch % epoch_store_every == 0)
+            or stop
+            or epoch >= epoch_max - 1
+        ):
+            optim_data = dict()
+            print("Store weights", epoch)
+            optim_data["epoch"] = epoch
+            optim_data["train_loss"] = train_loss
+            state = model.state_dict()
+            nn["optim"]["model_state"].append(state)
+            nn["optim"]["data"].append(optim_data)
+            best_epoch_index = epoch
+
+        # update progress bar
+        pbar.update(1)
+        epoch = epoch + 1
+
+    # end for loop
+    print("Training done. Best = {:.5f} at epoch {:.0f}".format(best_loss, best_epoch))
+
+    # prepare data to be saved
+    model_data["loss_values"] = loss_values
+    model_data["final_epoch"] = epoch
+    model_data["best_epoch"] = best_epoch
+    model_data["best_epoch_index"] = best_epoch_index
+    model_data["best_loss"] = best_loss
+
+    return nn
+
+
+def train_nn_TEST(x_train, y_train, params):
+    """
+    An optimized function to train the ARF neural network.
+    """
+    # 1. PREPARE DATA AND MODEL PARAMETERS
+    # ===================================================================
+    print("Preparing data and model parameters...")
+    x_train, y_train, model_data, N = nn_prepare_data(x_train, y_train, params)
+    y_vals, y_train = np.unique(y_train, return_inverse=True)
+    model_data["n_ene_win"] = len(y_vals)
+    current_gpu_mode, current_gpu_device = get_gpu_device(params["gpu_mode"])
+    model_data["current_gpu_mode"] = current_gpu_mode
+    print_nn_params(model_data)
+
+    # 2. CREATE EFFICIENT DATALOADER
+    # ===================================================================
+    # This is the most efficient method for small, in-memory datasets.
+    print("Creating PyTorch TensorDataset and DataLoader...")
+
+    # Convert NumPy arrays to PyTorch Tensors ONCE.
+    x_tensor = torch.from_numpy(x_train.astype(np.float32))
+    y_tensor = torch.from_numpy(y_train.astype(np.int64))
+
+    # Create a TensorDataset
+    train_dataset = torch.utils.data.TensorDataset(x_tensor, y_tensor)
+
+    # Use DataLoader with num_workers=0 (no multiprocessing overhead)
+    # and pin_memory=True (for faster CPU to CUDA transfer).
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=model_data["batch_size"],
+        num_workers=0,
+        pin_memory=True,
+        shuffle=True,  # Shuffle is good practice for training
+        drop_last=True,
+    )
+
+    # 3. SETUP MODEL, OPTIMIZER, and LOSS
+    # ===================================================================
+    print("Setting up model, optimizer, and loss function...")
+    model = Net_v1(model_data["H"], model_data["L"], model_data["n_ene_win"])
+    model.to(current_gpu_device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=model_data["learning_rate"])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=5)
+
+    # (Optional, but recommended) - Use the weighted loss for better results
+    # class_counts = np.bincount(y_train)
+    # class_weights = 1.0 / (class_counts + 1e-9)
+    # class_weights[0] *= model_data["RR"]
+    # class_weights = class_weights / np.mean(class_weights)
+    # class_weights = torch.tensor(class_weights, dtype=torch.float).to(current_gpu_device)
+
+    # 4. MAIN TRAINING LOOP
+    # ===================================================================
+    print("\nStarting optimized training...")
+    nn = {"model_data": model_data, "optim": {"model_state": [], "data": []}}
+    best_loss = np.Inf
+    best_epoch = -1
+    epochs_no_improve = 0
+    pbar = tqdm(range(model_data["epoch_max"]), disable=not params["progress_bar"])
+    for epoch in pbar:
+        model.train()
+        total_loss = 0
+
+        # An epoch is now one full pass over the entire dataset
+        for x_batch, y_batch in train_loader:
+            # Move data to GPU
+            X = x_batch.to(current_gpu_device)
+            Y = y_batch.to(current_gpu_device)
+
+            # Standard forward/backward pass
+            optimizer.zero_grad()
+            Y_out = model(X)
+
+            # Use unweighted loss as requested (or uncomment weighted version)
+            loss = F.cross_entropy(Y_out, Y)
+            # loss = F.cross_entropy(Y_out, Y, weight=class_weights)
+
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+
+        # After each epoch, calculate average loss
+        avg_loss = total_loss / len(train_loader)
+        scheduler.step(avg_loss)
+        pbar.set_description(f"Epoch {epoch + 1}, Loss: {avg_loss:.5f}")
+
+        # Check for improvement (for early stopping)
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            best_epoch = epoch
+            epochs_no_improve = 0
+            # Store the best model state efficiently
+            nn["optim"]["model_state"] = [model.state_dict()]
+            nn["optim"]["data"] = [{"epoch": epoch, "train_loss": avg_loss}]
+            nn["model_data"]["best_epoch"] = epoch
+            nn["model_data"]["best_loss"] = best_loss
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= model_data["early_stopping"]:
+            print(f"\nEarly stopping triggered after {epoch + 1} epochs.")
+            break
+
+    print(f"\nTraining done. Best loss = {best_loss:.5f} at epoch {best_epoch + 1}")
     return nn

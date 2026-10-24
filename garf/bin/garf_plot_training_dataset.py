@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys
 import garf
 import matplotlib.pyplot as plt
-from matplotlib import cm
-import numpy as np
-import uproot
-import ntpath
 import click
 
 # -----------------------------------------------------------------------------

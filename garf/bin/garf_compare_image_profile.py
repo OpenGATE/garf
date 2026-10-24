@@ -14,106 +14,98 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @click.argument("image1_mhd")
 @click.argument("image2_mhd")
 @click.option(
-    "--events",
-    "-e",
-    default=float(1),
+    "--scaling",
+    "-s",
+    default=1.0,
     help="Scale the image2 by this value before comparing",
 )
-@click.option("--islice", "-s", default=int(64), help="Image slice for the profile")
+@click.option(
+    "--islice", "-i", default=None, help="Image slice for the profile (middle if None)"
+)
 @click.option("--wslice", "-w", default=int(3), help="Slice width (to smooth)")
-def garf_compare_image_profile(image1_mhd, image2_mhd, islice, events, wslice):
+@click.option("--output", "-o", default="output.pdf", help="output")
+@click.option(
+    "-rmf",
+    default=False,
+    is_flag=True,
+    help="Remove first slice of ref data (hit slice)",
+)
+def garf_compare_image_profile(
+    image1_mhd, image2_mhd, islice, scaling, wslice, rmf, output
+):
     # Load image
     img_ref = sitk.ReadImage(image1_mhd)
     img = sitk.ReadImage(image2_mhd)
-    events = float(events)
-    islice = int(islice)
+    scaling = float(scaling)
     wslice = int(wslice)
 
-    # Scale data to the ref nb of particles
-    img = img * events
+    # slice
+    if islice is None:
+        islice = int(img.GetSize()[0] / 2)
+    else:
+        islice = int(islice)
 
     # Get the pixels values as np array
     data_ref = sitk.GetArrayFromImage(img_ref).astype(float)
     data = sitk.GetArrayFromImage(img).astype(float)
 
+    # Scale data to the ref nb of particles
+    data = data * scaling
+
+    print(f"Reference image shape : {data_ref.shape}")
+    print(f"Test image shape      : {data.shape}")
+
     # Sometimes not same nb of slices -> crop the data_ref
     if len(data_ref) > len(data):
         data_ref = data_ref[0 : len(data), :, :]
 
+    # Remove first slice ?
+    if rmf:
+        data_ref = data_ref[1:, :, :]
+
     # Criterion1: global counts in every windows
     s_ref = np.sum(data_ref, axis=(1, 2))
     s = np.sum(data, axis=(1, 2))
+    ratio = (s - s_ref) / s_ref * 100.0
 
-    print("Ref:     Singles/Scatter/Peak1/Peak2: {}".format(s_ref))
-    print("Img:     WARNING/Scatter/Peak1/Peak2: {}".format(s))
-    print(
-        "% diff : WARNING/Scatter/Peak1/Peak2: {}".format((s - s_ref) / s_ref * 100.0)
-    )
+    # global counts
+    print(f"Global counts, reference : {s_ref}")
+    print(f"Global counts, test image: {s}")
+    print(f"Global counts, % diff    : {ratio} %")
 
     # Profiles
-    # data image: !eee!Z,Y,X
     p_ref = np.mean(data_ref[:, islice - wslice : islice + wslice - 1, :], axis=1)
     p = np.mean(data[:, islice - wslice : islice + wslice - 1, :], axis=1)
-    x = np.arange(0, 128, 1)
+    x = np.arange(0, data.shape[1], 1)
 
+    # max
+    vmax_ref = np.max(p_ref[1:, :])
+    vmax = np.max(p[1:, :])
+    print(f"Max value in ref image  : {vmax_ref}")
+    print(f"Max value in test image : {vmax}")
+
+    # nb of energy windows
     nb_ene = len(data)
     print("Nb of energy windows: ", nb_ene)
+    win = [f"win {i}" for i in np.arange(nb_ene)]
 
-    if nb_ene == 3:  # Tc99m
-        win = ["WARNING", "Scatter", "Peak 140"]
-
-    if nb_ene == 6:  # In111
-        win = ["WARNING", "Scatter1", "Peak171", "Scatter2", "Scatter3", "Peak245"]
-
-    if nb_ene == 7:  # Lu177
-        win = [
-            "WARNING",
-            "Scatter1",
-            "Peak113",
-            "Scatter2",
-            "Scatter3",
-            "Peak208",
-            "Scatter4",
-        ]
-
-    if nb_ene == 8:
-        win = [
-            "WARNING",
-            "Scatter1",
-            "Peak364",
-            "Scatter2",
-            "Scatter3",
-            "Scatter4",
-            "Peak637",
-            "Peak722",
-        ]
-
-    fig, ax = plt.subplots(ncols=nb_ene - 1, nrows=1, figsize=(35, 5))
-
-    i = 1
-    vmax = np.max(p_ref[1:, :])
-    vmax = np.max(p[1:, :])
-    print("Max value in ref image for the scale : {}".format(vmax))
-
+    # figure
+    fig, ax = plt.subplots(ncols=nb_ene, nrows=1, figsize=(35, 5))
     fs = 12
-
     plt.rc("font", size=fs)
-    while i < nb_ene:
-        a = ax[i - 1]
-
+    for i in range(nb_ene):
+        a = ax[i]
         a.plot(x, p_ref[i], "g", label="Analog", alpha=0.5, linewidth=2.0)
         a.plot(x, p[i], "k--", label="ARF", alpha=0.9, linewidth=1.0)
         a.set_title(win[i], fontsize=fs + 5)
         a.legend(loc="best")
-        # a.labelsize = 40
         a.tick_params(labelsize=fs)
-        # a.set_ylim([0, vmax])
         i += 1
 
     plt.suptitle("Compare " + image1_mhd + " vs " + image2_mhd + " w=" + str(wslice))
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
-    plt.savefig("output.pdf")
+    plt.savefig(output)
     plt.show()
 
 
