@@ -1,8 +1,8 @@
 # garf tests
 
-The tests check the numerical behaviour of garf: geometry, network output, images and training. They were written before the v3 refactor to pin the behaviour of garf 2.11, so that any later change of the numbers is either detected or intended.
+The tests check the numerical behaviour of garf: geometry, network output, images and training. The first ones (golden, geometry, image, train) were written before the v3 refactor to pin the behaviour of garf 2.11; the v3 tests (`test_v3_*.py`) check the new API against the same golden data, so that any change of the numbers is either detected or intended. The tests of the garf 2.11 API will be removed with that API.
 
-- 35 tests: 30 pass, 5 are known bugs (`xfail`), see below.
+- 68 tests: 64 pass, 4 are known bugs (`xfail`), see below.
 - CPU only, deterministic, about 6 s in total.
 - No GATE needed. Tests that need a GATE simulation (analog vs ARF) belong to the opengate test suite.
 
@@ -27,7 +27,9 @@ CI: `.github/workflows/tests.yml` runs `pytest -rxX` on ubuntu and macOS, Python
 | `tests/test_geometry.py` | angles, shift to the crystal, plane intersection | 12 |
 | `tests/test_image.py` | network output normalisation, pixels, image accumulation | 14 |
 | `tests/test_train.py` | training on synthetic data | 1 |
-| `tests/test_known_bugs.py` | known bugs, `xfail(strict=True)` | 5 |
+| `tests/test_known_bugs.py` | known bugs, `xfail(strict=True)` | 4 |
+| `tests/test_v3_api.py` | v3 API: `ArfModel`, `ArfProjector`, `.garf` format, `garf_convert` | 27 |
+| `tests/test_v3_features.py` | v3 network input features, angle conventions of old datasets | 7 |
 | `tests/generate_golden.py` | script that writes the golden data (not a test) | — |
 | `tests/data/arf_Tc99m_v034.pth` | legacy model (Tc99m, 3 channels, H=200, L=3), from gate_data | — |
 | `tests/data/golden_v034.npz` | inputs and reference outputs for `test_golden.py` | — |
@@ -93,6 +95,43 @@ With the garf 2.11 trainer: mean 0.014, max 0.091 (at the peak of the detection 
 
 The file has an autouse fixture that replaces the `DataLoader` of `garf_train` by one with `num_workers=0`: with `num_workers=1`, a worker process starts at every epoch (about 6 s on macOS) and it deadlocks under pytest. The batches and their order are unchanged.
 
+## v3 API (`test_v3_api.py`)
+
+The legacy model is read from the `.pth` and from its conversion to `.garf` (tests marked `[pth, garf]` run with both). The inputs are the physical quantities passed by GATE (`x, y, ux, uy, uz, E, w`); the features are `legacy_acos`, the shift is `legacy`. The results must equal the golden data of garf 2.11 (same tolerances).
+
+| test | checks |
+| --- | --- |
+| `test_legacy_pth_metadata` | the `.pth` gives features `legacy_acos`, 3 channels, `RR = 50`, the architecture, the stored and selected epochs |
+| `test_legacy_pth_warns` | reading a `.pth` warns that the format is deprecated |
+| `test_legacy_state_selection[last, first]` | default: the last stored state (what garf ≤ 2.11 always used); another one with `legacy_state_index`. `best_epoch_index` is not used: it is an index in old garf versions and an epoch number in garf 2.11 |
+| `test_predict_golden[pth, garf]` | `ArfModel.predict(ux, uy, uz, E)` (numpy) = golden probabilities, numpy float64 output |
+| `test_predict_torch_input[pth, garf]` | same with torch inputs, torch output |
+| `test_project_golden[pth, garf]` | `ArfProjector.project`: pixel indices identical to the golden ones (`ix = v`, `iy = u`), values = weighted probabilities of the windows |
+| `test_accumulate_golden[pth, garf] × [hit slice or not]` | `ArfProjector.accumulate` into a numpy image = golden image; the squared image = sum of `(w·p)²` per pixel |
+| `test_accumulate_torch_image[pth, garf]` | float32 torch inputs and image (as in `GarfDetector`): same totals per channel |
+| `test_save_load_round_trip` | `.pth` → `.garf` → `.garf`: same features, `RR`, architecture, metadata, identical weights |
+| `test_garf_file_is_not_pickle` | the `.garf` header (format, version, type, features) is read without loading the tensors; only one state is stored |
+| `test_wrong_format_version` | an unknown format version is an error |
+| `test_ensemble_averages_probabilities` | an ensemble of 2 networks gives the mean of their probabilities |
+| `test_projector_distance_from_model` | `distance_to_crystal` taken from the model metadata when not given; warning when the given one differs |
+| `test_projector_needs_a_distance` | error when neither the projector nor the model gives `distance_to_crystal` |
+| `test_shift_modes` | `legacy`: shift `d·(ux, uy)`; `straight`: `d·(ux, uy)/uz` |
+| `test_non_square_image` | 32 × 16 image: array `(channels, 16, 32)`, corners and centre in the right pixels |
+| `test_wrong_image_shape` | an image with the wrong shape is an error |
+| `test_inputs_must_have_the_same_length` | inputs of different lengths are an error |
+| `test_garf_convert_cli` | `garf_convert x.pth x.garf -d 74.625`: the converted model stores the distance and gives the golden results |
+
+## v3 features (`test_v3_features.py`)
+
+| test | checks |
+| --- | --- |
+| `test_features_values` | `ux_uy_E`, `legacy_acos`, `theta_phi` columns from known directions |
+| `test_unknown_features` | an unknown feature set is an error |
+| `test_direction_from_angles_round_trip[legacy_acos, theta_phi]` | direction → angles → direction, for all azimuths and `uz` down to 0.01 |
+| `test_wrong_convention_is_detected` | `theta_phi` angles read as `legacy_acos` (and the reverse) are rejected, with a message suggesting the other convention |
+| `test_unknown_convention` | an unknown angle convention is an error |
+| `test_ux_uy_close_to_legacy_near_normal_incidence` | near normal incidence (`uz > 0.995`), `90° - acos(u)` equals `u` (in degrees) within 0.02°: the default `ux_uy_E` carries the same information as `legacy_acos` up to an affine map |
+
 ## Known bugs (`test_known_bugs.py`)
 
 Each test describes the **correct** behaviour and is marked `xfail(strict=True)`. Today they fail. When a bug is fixed, the test passes, strict mode reports it as an error (`XPASS(strict)`), and the marker must be removed: the test then stays as a normal regression test.
@@ -101,7 +140,6 @@ Each test describes the **correct** behaviour and is marked `xfail(strict=True)`
 | --- | --- | --- |
 | `test_gate_column_layout_gives_golden_result` | GATE ≥ 10.0.3 passes `x, y, ux, uy, uz, E, w`, garf reads `x, y, θ, φ, E` (and the weights only with 6 columns) | 337 of 2000 points leave the image (shift of about `d` on both axes), and the others have wrong probabilities |
 | `test_torch_image_equals_numpy_non_square[hit slice or not]` | torch image path: `x` checked against `size[1]`, flat index `y·shape[0] + x` | `IndexError` with a 32 × 16 image |
-| `test_load_nn_returns_best_epoch` | `load_nn` looks for `best_epoch_eval`, never written: always the last stored state | a file with two states and `best_epoch_index = 0` loads the second one |
 | `test_training_uses_the_whole_dataset` | no shuffle and the epoch stops after `batch_per_epoch` (+1) batches: only the first entries are used | ordered dataset (first half channel 0, second half channel 1): predicted probability of channel 1 is 0.003 instead of 0.5 |
 
 ## Golden data
@@ -117,7 +155,7 @@ python tests/generate_golden.py
 ## Not covered yet
 
 - reading a training dataset ROOT file (`load_training_dataset`), to be written with the v3 dataset module,
-- the command-line tools in `garf/bin`,
+- the command-line tools in `garf/bin` (except `garf_convert`),
 - `GarfDetector` end to end (initialisation, several heads, `save_projections`),
 - GPU (CUDA, MPS) paths,
 - analog vs ARF on a real detector: needs GATE, planned in the opengate tests.

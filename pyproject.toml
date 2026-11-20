@@ -35,6 +35,7 @@ dependencies = [
         "numpy",
         "SimpleITK",
         "torch>=2.1.0",
+        "safetensors",
         "tqdm",
         "uproot",
 ]
@@ -53,5 +54,6 @@ garf_compare_image_profile = "garf.bin.garf_compare_image_profile:garf_compare_i
 garf_plot_training_dataset = "garf.bin.garf_plot_training_dataset:garf_plot_training_dataset"
 garf_plot_test_dataset = "garf.bin.garf_plot_test_dataset:garf_plot_training_dataset"
 garf_train = "garf.bin.garf_train:garf_train"
+garf_convert = "garf.bin.garf_convert:garf_convert"
 garf_nn_info = "garf.bin.garf_nn_info:garf_nn_info"
 pytorch_info = "garf.bin.pytorch_info:pytorch_info"

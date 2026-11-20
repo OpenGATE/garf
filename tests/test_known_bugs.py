@@ -57,30 +57,6 @@ def test_torch_image_equals_numpy_non_square(hit_slice):
 
 @pytest.mark.xfail(
     strict=True,
-    reason='load_nn reads "best_epoch_eval" (never written): always the last state',
-)
-def test_load_nn_returns_best_epoch(tmp_path):
-    model_data = dict(H=4, L=1, n_ene_win=3, best_epoch_index=0)
-    states = []
-    for seed in [1, 2]:
-        torch.manual_seed(seed)
-        states.append(garf.Net_v1(4, 1, 3).state_dict())
-    nn = dict(
-        model_data=model_data,
-        optim=dict(
-            model_state=states,
-            data=[dict(epoch=10, train_loss=0.1), dict(epoch=20, train_loss=0.2)],
-        ),
-    )
-    pth = tmp_path / "two_states.pth"
-    torch.save(nn, pth)
-    _, model = garf.load_nn(pth, verbose=False, gpu_mode="cpu")
-    for k, val in states[0].items():
-        torch.testing.assert_close(model.state_dict()[k], val)
-
-
-@pytest.mark.xfail(
-    strict=True,
     reason="no shuffle + epoch stops at batch_per_epoch: only the first entries are used",
 )
 def test_training_uses_the_whole_dataset():

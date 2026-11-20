@@ -1,4 +1,22 @@
-# import files
+# garf <= 2.11 API (to be replaced by the v3 API below)
 from .helpers import *
 from .garf_train import *
 from .garf_detector import *
+
+# garf v3 API
+from .features import (
+    FEATURES,
+    DEFAULT_FEATURES,
+    compute_features,
+    direction_from_angles,
+    check_angles,
+)
+from .model import (
+    ArfModel,
+    MlpArfModel,
+    Mlp,
+    resolve_device,
+    FILE_EXTENSION,
+    FORMAT_VERSION,
+)
+from .projector import ArfProjector, SHIFT_MODES
