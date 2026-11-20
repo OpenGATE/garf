@@ -2,7 +2,7 @@
 
 The tests check the numerical behaviour of garf: geometry, network output, images and training. The first ones (golden, geometry, image, train) were written before the v3 refactor to pin the behaviour of garf 2.11; the v3 tests (`test_v3_*.py`) check the new API against the same golden data, so that any change of the numbers is either detected or intended. The tests of the garf 2.11 API will be removed with that API.
 
-- 82 tests: 78 pass, 4 are known bugs of the garf 2.11 API (`xfail`), see below.
+- 91 tests: 87 pass, 4 are known bugs of the garf 2.11 API (`xfail`), see below.
 - CPU only, deterministic, about 13 s in total.
 - No GATE needed. Tests that need a GATE simulation (analog vs ARF) belong to the opengate test suite.
 

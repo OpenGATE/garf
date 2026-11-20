@@ -48,7 +48,7 @@ def test_training_recovers_known_probabilities(features):
     assert h["selected_loss"] == min(h["validation_loss"])
 
 
-@pytest.mark.filterwarnings("ignore:garf\\: an input feature is constant")
+@pytest.mark.filterwarnings("ignore:garf. an input feature is constant")
 def test_training_uses_the_whole_dataset():
     """Ordered dataset (first half channel 0, second half channel 1): see test_known_bugs."""
     n = 20_000
@@ -76,7 +76,7 @@ def test_training_uses_the_whole_dataset():
     np.testing.assert_allclose(p[:, 1], 0.5, atol=0.15)
 
 
-@pytest.mark.filterwarnings("ignore:garf\\: an input feature is constant")
+@pytest.mark.filterwarnings("ignore:garf. an input feature is constant")
 def test_weights_equal_duplication():
     """Weight 2 on an entry ~ the entry twice: same probabilities."""
     rng = np.random.default_rng(5)
@@ -102,7 +102,7 @@ def test_weights_equal_duplication():
     np.testing.assert_allclose(p[:, 1].mean(), 0.5625, atol=0.03)
 
 
-@pytest.mark.filterwarnings("ignore:garf\\: an input feature is constant")
+@pytest.mark.filterwarnings("ignore:garf. an input feature is constant")
 def test_russian_roulette():
     """Not-detected photons kept with probability 1/rr: predict corrects it."""
     rng = np.random.default_rng(6)
