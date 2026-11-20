@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import garf
-import time
 import json
-import socket
-import torch
+from pathlib import Path
+
 import click
+
+import garf
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -15,55 +15,33 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @click.argument("param")
 @click.argument("data")
 @click.argument("output")
-@click.option("--progress-bar/--no-progress-bar", default=True)
-def garf_train(param, data, output, progress_bar):
+@click.option(
+    "--angle-convention",
+    type=click.Choice(["legacy_acos", "theta_phi"]),
+    default=None,
+    help="Only for old datasets (Theta, Phi): legacy_acos for GATE 9 and "
+    "GATE <= 10.0.2, theta_phi for GATE 10.0.3 to 10.1.2",
+)
+@click.option("--quiet", "-q", is_flag=True, help="No output during the training")
+def garf_train(param, data, output, angle_convention, quiet):
     """
     \b
-    Train a ARF-nn (neural network) from a training dataset.
-    <PARAM> :
+    Train an ARF neural network from a training dataset.
+    PARAM  : JSON file with the training parameters, e.g.
+             {"H": 200, "L": 3, "epochs": 100, "rr": 50}
+             (see garf.TrainingParameters for all of them)
+    DATA   : training dataset (ROOT, from the GATE ARFTrainingDatasetActor)
+    OUTPUT : model file (.garf)
     """
-    param_filename = param
-    data_filename = data
-    output_filename = output
-
-    # Read training dataset
-    data, theta, phi, E, w = garf.load_training_dataset(data_filename)
-
-    # Read parameters
-    param_file = open(param_filename).read()
-    params = json.loads(param_file)
-    params["progress_bar"] = progress_bar
-
-    # Print info
-    print("Training dataset", data_filename)
-    garf.print_training_dataset_info(data, params["RR"])
-
-    # gpu mode: auto / cpu / gpu
-    params["gpu_mode"] = "auto"
-
-    # Train
-    x = data[:, 0:3]  # Input:  theta, phi, E
-    y = data[:, 3]  # Output: w
-    start = time.strftime("%c")
-    print("\nNeural network parameters", param_filename)
-    nn = garf.train_nn(x, y, params)
-
-    # Add infos
-    now = time.strftime("%c")
-    hn = socket.gethostname()
-    model_data = nn["model_data"]
-    model_data["training_filename"] = data_filename
-    model_data["training_size"] = len(x)
-    model_data["start date"] = start
-    model_data["end date"] = now
-    model_data["hostname"] = hn
-
-    # save output model and associated data
-    f = open(output_filename, "wb")
-    torch.save(nn, output_filename)
-    print("\nNN saved to ", output_filename)
+    params = garf.TrainingParameters.from_dict(json.loads(Path(param).read_text()))
+    dataset = garf.load_training_dataset(data, angle_convention=angle_convention)
+    if not quiet:
+        print(f"Training dataset {data}: {dataset.summary()}")
+    model = garf.train(dataset, params, verbose=not quiet)
+    model.save(output)
+    if not quiet:
+        print(f"Model saved to {output}")
 
 
-# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     garf_train()

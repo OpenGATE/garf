@@ -52,9 +52,9 @@ def garf_convert(pth_filename, output, state_index, distance_to_crystal, detecto
         detector["name"] = detector_name
     if detector:
         model.metadata["detector"] = detector
-    model.metadata.setdefault("provenance", {})["converted_by"] = (
-        f"garf_convert (garf {garf.model.garf_version()})"
-    )
+    model.metadata.setdefault("provenance", {})[
+        "converted_by"
+    ] = f"garf_convert (garf {garf.model.garf_version()})"
     model.save(output)
 
     t = model.metadata["training"]

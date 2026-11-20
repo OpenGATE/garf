@@ -2,8 +2,8 @@
 
 The tests check the numerical behaviour of garf: geometry, network output, images and training. The first ones (golden, geometry, image, train) were written before the v3 refactor to pin the behaviour of garf 2.11; the v3 tests (`test_v3_*.py`) check the new API against the same golden data, so that any change of the numbers is either detected or intended. The tests of the garf 2.11 API will be removed with that API.
 
-- 68 tests: 64 pass, 4 are known bugs (`xfail`), see below.
-- CPU only, deterministic, about 6 s in total.
+- 82 tests: 78 pass, 4 are known bugs of the garf 2.11 API (`xfail`), see below.
+- CPU only, deterministic, about 13 s in total.
 - No GATE needed. Tests that need a GATE simulation (analog vs ARF) belong to the opengate test suite.
 
 ## Running
@@ -30,6 +30,8 @@ CI: `.github/workflows/tests.yml` runs `pytest -rxX` on ubuntu and macOS, Python
 | `tests/test_known_bugs.py` | known bugs, `xfail(strict=True)` | 4 |
 | `tests/test_v3_api.py` | v3 API: `ArfModel`, `ArfProjector`, `.garf` format, `garf_convert` | 27 |
 | `tests/test_v3_features.py` | v3 network input features, angle conventions of old datasets | 7 |
+| `tests/test_v3_dataset.py` | v3 training datasets: ROOT reading (v3 and old formats), metadata, split | 11 |
+| `tests/test_v3_train.py` | v3 trainer on synthetic data | 12 |
 | `tests/generate_golden.py` | script that writes the golden data (not a test) | — |
 | `tests/data/arf_Tc99m_v034.pth` | legacy model (Tc99m, 3 channels, H=200, L=3), from gate_data | — |
 | `tests/data/golden_v034.npz` | inputs and reference outputs for `test_golden.py` | — |
@@ -132,6 +134,35 @@ The legacy model is read from the `.pth` and from its conversion to `.garf` (tes
 | `test_unknown_convention` | an unknown angle convention is an error |
 | `test_ux_uy_close_to_legacy_near_normal_incidence` | near normal incidence (`uz > 0.995`), `90° - acos(u)` equals `u` (in degrees) within 0.02°: the default `ux_uy_E` carries the same information as `legacy_acos` up to an affine map |
 
+## v3 training datasets (`test_v3_dataset.py`)
+
+| test | checks |
+| --- | --- |
+| `test_write_read_round_trip[without, with weights]` | `write_training_dataset` → `load_training_dataset`: same columns, weights, metadata (`rr`, `n_channels`) |
+| `test_old_dataset[legacy_acos, theta_phi] × [window, w]` | old datasets (`Theta`, `Phi`, window column named `window` or `w`): error without the angle convention; with it, the directions are recovered |
+| `test_old_dataset_wrong_convention` | `theta_phi` angles read as `legacy_acos`: error |
+| `test_not_a_training_dataset` | a ROOT file without the "ARF (training)" tree, or a missing file: error |
+| `test_n_channels` | from the metadata if given (a window may have no entry), else `max(window) + 1`; inconsistent metadata: error |
+| `test_split` | random train/validation split: sizes, no entry lost, reproducible with the seed, fraction 0 allowed |
+| `test_sidecar_metadata` | metadata in `<name>.json` next to the ROOT file (`rr`, `detector`) |
+
+## v3 trainer (`test_v3_train.py`)
+
+The synthetic problem is the one of `test_train.py` (garf 2.11 trainer), with the directions computed from the angles.
+
+| test | checks |
+| --- | --- |
+| `test_training_recovers_known_probabilities[ux_uy_E, legacy_acos, theta_phi]` | H = 32, L = 1, 40 epochs: mean error < 0.015, max < 0.09 (0.12 for `theta_phi`). Measured: mean 0.009–0.010, max 0.06–0.07, against mean 0.014, max 0.091 for the garf 2.11 trainer. The selected epoch has the lowest validation loss |
+| `test_training_uses_the_whole_dataset` | the ordered dataset of the known bug of the garf 2.11 trainer: probability 0.5 recovered |
+| `test_weights_equal_duplication` | particle weights in the loss: weight 3 on detected entries moves `p1` from 0.3 to 0.5625 |
+| `test_russian_roulette` | dataset with `rr = 10` (half detected after the roulette): predicted `p1 = 1/11` |
+| `test_rr_must_be_known_and_consistent` | `rr` missing, or different in the parameters and the dataset metadata: error |
+| `test_ensemble` | 3 networks, seeds `seed`, `seed+1`, `seed+2`, saved and read back, same predictions |
+| `test_early_stopping` | the training stops 5 epochs after the best validation loss |
+| `test_unknown_parameter` | unknown parameters (e.g. the garf 2.11 `batch_per_epoch`) are an error |
+| `test_save_load_trained_model` | features, `distance_to_crystal` (from the dataset metadata) and the dataset info are stored in the model |
+| `test_garf_train_cli` | `garf_train params.json train.root m.garf` |
+
 ## Known bugs (`test_known_bugs.py`)
 
 Each test describes the **correct** behaviour and is marked `xfail(strict=True)`. Today they fail. When a bug is fixed, the test passes, strict mode reports it as an error (`XPASS(strict)`), and the marker must be removed: the test then stays as a normal regression test.
@@ -154,8 +185,7 @@ python tests/generate_golden.py
 
 ## Not covered yet
 
-- reading a training dataset ROOT file (`load_training_dataset`), to be written with the v3 dataset module,
-- the command-line tools in `garf/bin` (except `garf_convert`),
+- the plotting command-line tools in `garf/bin`,
 - `GarfDetector` end to end (initialisation, several heads, `save_projections`),
 - GPU (CUDA, MPS) paths,
 - analog vs ARF on a real detector: needs GATE, planned in the opengate tests.

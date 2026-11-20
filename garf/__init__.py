@@ -20,3 +20,9 @@ from .model import (
     FORMAT_VERSION,
 )
 from .projector import ArfProjector, SHIFT_MODES
+from .dataset import (
+    TrainingDataset,
+    load_training_dataset,
+    write_training_dataset,
+)
+from .trainer import TrainingParameters, train
