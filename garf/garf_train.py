@@ -70,7 +70,7 @@ def nn_get_optimiser(model_data, model):
 
     # decreasing learning_rate
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, "min", verbose=False, patience=50
+        optimizer, "min", patience=50
     )
 
     return optimizer, scheduler
@@ -145,9 +145,9 @@ def train_nn(x_train, y_train, params):
     # Main loop initialization
     epoch_max = model_data["epoch_max"]
     early_stopping = model_data["early_stopping"]
-    best_loss = np.Inf
+    best_loss = np.inf
     best_epoch = 0
-    best_train_loss = np.Inf
+    best_train_loss = np.inf
     loss_values = np.zeros(epoch_max + 1)
 
     # Print parameters
