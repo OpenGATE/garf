@@ -4,7 +4,7 @@ Known bugs of garf <= 2.11, written as the *expected* behaviour and marked
 xfail(strict=True): they fail today; when a bug is fixed the test passes,
 strict mode turns that into an error, and the marker must be removed.
 
-See opengate docs_dev/readme007_garf_wip.md.
+See docs/garf.md (versions and compatibility).
 """
 
 import numpy as np
