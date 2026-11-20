@@ -39,6 +39,15 @@ dependencies = [
         "uproot",
 ]
 
+[project.optional-dependencies]
+test = [
+        "pytest",
+        "scipy",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.scripts]
 garf_compare_image_profile = "garf.bin.garf_compare_image_profile:garf_compare_image_profile"
 garf_plot_training_dataset = "garf.bin.garf_plot_training_dataset:garf_plot_training_dataset"
