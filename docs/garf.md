@@ -125,7 +125,7 @@ pip install -e ".[test]"
 pytest
 ```
 
-CPU only, a few seconds. Golden data (`tests/data/golden_v034.npz`) pin the numerical results; regenerate them with `tests/generate_golden.py` only for intended, documented changes. Known bugs are tests marked `xfail(strict=True)`: remove the marker when the bug is fixed.
+CPU only, a few seconds. Golden data (`tests/data/golden_v034.npz`) pin the numerical results; regenerate them with `tests/generate_golden.py` only for intended, documented changes. Known bugs are tests marked `xfail(strict=True)`: remove the marker when the bug is fixed. Details of each test: [tests.md](tests.md).
 
 ## References
 
