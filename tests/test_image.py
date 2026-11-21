@@ -166,7 +166,7 @@ def test_image_accumulation_numpy(hit_slice, size):
 
 def torch_detector(model, size, spacing, rr, n_ene, distance, hit_slice):
     """A GarfDetector with the members used by build_image_from_projected_points_torch."""
-    d = garf.GarfDetector()
+    d = garf.garf_detector.GarfDetector()
     d.model = model
     d.current_gpu_mode = "cpu"
     d.current_gpu_device = DEV

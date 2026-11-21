@@ -86,7 +86,7 @@ def test_plane_intersection_numpy(angle_deg):
     batch[:, 4:7] = rot.apply(batch[:, 4:7])
 
     detector = SimpleNamespace(radius=RADIUS)
-    plane = garf.GarfDetector.arf_plane_init_numpy(detector, rot, len(batch))
+    plane = garf.garf_detector.GarfDetector.arf_plane_init_numpy(detector, rot, len(batch))
     projected = garf.arf_plane_intersection(batch, plane, SIZE_MM)
 
     expected = expected_intersection(batch, rot)

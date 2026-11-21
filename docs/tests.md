@@ -2,8 +2,8 @@
 
 The tests check the numerical behaviour of garf: geometry, network output, images and training. The first ones (golden, geometry, image, train) were written before the v3 refactor to pin the behaviour of garf 2.11; the v3 tests (`test_v3_*.py`) check the new API against the same golden data, so that any change of the numbers is either detected or intended. The tests of the garf 2.11 API will be removed with that API.
 
-- 91 tests: 87 pass, 4 are known bugs of the garf 2.11 API (`xfail`), see below.
-- CPU only, deterministic, about 13 s in total.
+- 100 tests: 96 pass, 4 are known bugs of the garf 2.11 API (`xfail`), see below.
+- CPU only, deterministic, about 17 s in total.
 - No GATE needed. Tests that need a GATE simulation (analog vs ARF) belong to the opengate test suite.
 
 ## Running
@@ -32,6 +32,7 @@ CI: `.github/workflows/tests.yml` runs `pytest -rxX` on ubuntu and macOS, Python
 | `tests/test_v3_features.py` | v3 network input features, angle conventions of old datasets | 7 |
 | `tests/test_v3_dataset.py` | v3 training datasets: ROOT reading (v3 and old formats), metadata, split | 11 |
 | `tests/test_v3_train.py` | v3 trainer on synthetic data | 12 |
+| `tests/test_v3_detector.py` | v3 standalone `GarfDetector` against the garf 2.11 one | 9 |
 | `tests/generate_golden.py` | script that writes the golden data (not a test) | — |
 | `tests/data/arf_Tc99m_v034.pth` | legacy model (Tc99m, 3 channels, H=200, L=3), from gate_data | — |
 | `tests/data/golden_v034.npz` | inputs and reference outputs for `test_golden.py` | — |
@@ -163,6 +164,20 @@ The synthetic problem is the one of `test_train.py` (garf 2.11 trainer), with th
 | `test_save_load_trained_model` | features, `distance_to_crystal` (from the dataset metadata) and the dataset info are stored in the model |
 | `test_garf_train_cli` | `garf_train params.json train.root m.garf` |
 
+## v3 standalone detector (`test_v3_detector.py`)
+
+Particles: 50 000, in a 50 mm cube around the origin, isotropic, 70 % at 140.5 keV. Three gantry angles (0°, 100°, 230°), plane at 300 mm with the Intevo-like rotation used by gaga-phsp, 64 × 64 × 4.8 mm image, legacy model.
+
+| test | checks |
+| --- | --- |
+| `test_detector_equals_old_numpy_path[without, with hit slice]` | same images as the garf 2.11 numpy path, driven as gaga-phsp did (rtol 1e-5). The 2.11 path is run with the hit slice, then the slice is dropped: without it, garf 2.11 writes the windows in channels 0..n-2 while gaga-phsp dropped channel 0 (window 1 lost) |
+| `test_detector_close_to_old_torch_path[without, with hit slice]` | same totals per angle and channel as the garf 2.11 torch path (float32, rtol 1e-3) |
+| `test_numpy_and_torch_batches_and_chunks` | numpy or torch particles, one or several chunks (`batch_size`): same images |
+| `test_non_square_image` | 64 × 32 image: shape `(angles, channels, 32, 64)` (broken in the 2.11 torch path) |
+| `test_images_itk` | ITK images: size, spacing `(sx, sy, 1)`, centred origin |
+| `test_wrong_batch_shape` | particles must be `(n, 7)` |
+| `test_missing_parameter` | `initialize` without `image_size`: error |
+
 ## Known bugs (`test_known_bugs.py`)
 
 Each test describes the **correct** behaviour and is marked `xfail(strict=True)`. Today they fail. When a bug is fixed, the test passes, strict mode reports it as an error (`XPASS(strict)`), and the marker must be removed: the test then stays as a normal regression test.
@@ -186,6 +201,5 @@ python tests/generate_golden.py
 ## Not covered yet
 
 - the plotting command-line tools in `garf/bin`,
-- `GarfDetector` end to end (initialisation, several heads, `save_projections`),
 - GPU (CUDA, MPS) paths,
 - analog vs ARF on a real detector: needs GATE, planned in the opengate tests.

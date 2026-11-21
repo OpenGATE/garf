@@ -48,6 +48,9 @@ test = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]
 
 [project.scripts]
 garf_compare_image_profile = "garf.bin.garf_compare_image_profile:garf_compare_image_profile"

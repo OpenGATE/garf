@@ -26,3 +26,4 @@ from .dataset import (
     write_training_dataset,
 )
 from .trainer import TrainingParameters, train
+from .detector import GarfDetector  # replaces garf_detector.GarfDetector (2.11)
