@@ -120,6 +120,21 @@ def apply_russian_roulette(probs, rr):
     return probs / probs.sum(dim=1, keepdim=True)
 
 
+def russian_roulette_of_theta(rr_theta, theta_deg):
+    """Factor per photon of a direction-dependent Russian roulette
+    rr_theta = {"theta_edges_deg": [...], "values": [...]}, as the GATE
+    training actor: values[i] for theta in [edges[i], edges[i+1]), outside
+    the closest bin. theta_deg: tensor (n,)."""
+    edges = torch.as_tensor(
+        rr_theta["theta_edges_deg"], dtype=theta_deg.dtype, device=theta_deg.device
+    )
+    values = torch.as_tensor(
+        rr_theta["values"], dtype=theta_deg.dtype, device=theta_deg.device
+    )
+    i = torch.bucketize(theta_deg, edges, right=True).clamp(1, len(values))
+    return values[i - 1]
+
+
 class ArfModel:
     """
     Base class (network or table). Subclasses implement _probs(x) and the
@@ -306,7 +321,9 @@ class MlpArfModel(ArfModel):
         a = architecture
         block = a.get("block", "mlp")
         if block not in BLOCKS:
-            raise ValueError(f"garf: unknown network block '{block}', must be one of {BLOCKS}")
+            raise ValueError(
+                f"garf: unknown network block '{block}', must be one of {BLOCKS}"
+            )
         cls = Mlp if block == "mlp" else ResMlp
         return cls(a["n_in"], a["H"], a["L"], a["n_out"], a.get("activation", "relu"))
 

@@ -66,7 +66,10 @@ def spectral_classes(
 ):
     """
     TrainingDataset whose window is the network class: 0 = no single in the
-    bins, else 1 + k with k the energy bin ("absolute") or the energy-loss
+    bins, else 1 + k. The bins: from the edep column if the dataset has it
+    (all_singles, any edges_mev), else the window ids of the dataset must be
+    these bins (contiguous narrow windows, deposit_bins_from_metadata).
+    k is the energy bin ("absolute") or the energy-loss
     bin ("loss", width loss_bin_mev, default the bin width, from loss_min_mev:
     default 0 for "deposit", -0.04 MeV for "measured").
     stage: "measured" (end of the digitizer) or "deposit" (before the blur).
@@ -78,9 +81,20 @@ def spectral_classes(
         raise ValueError(f"garf: unknown stage {stage}")
     if loss_min_mev is None:
         loss_min_mev = -0.04 if stage == "measured" else 0.0
-    w = np.asarray(dataset.window)
     edges = np.asarray(edges_mev, float)
     nb = len(edges) - 1
+    if dataset.edep is not None:
+        # all_singles dataset: the bins are those given here (any width)
+        if dataset.multiple_singles():
+            raise ValueError(
+                "garf: several singles per photon: count targets are needed (not implemented yet)"
+            )
+        e = np.asarray(dataset.edep, float)
+        k = np.digitize(e, edges)  # 1..nb inside
+        w = np.where((e > 0) & (k >= 1) & (k <= nb), k, 0)
+    else:
+        # narrow energy windows of the training actor: window id = bin
+        w = np.asarray(dataset.window)
     centre = 0.5 * (edges[1:] + edges[:-1])
     det = w > 0
     if representation == "absolute":

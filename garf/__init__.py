@@ -16,6 +16,7 @@ from .features import (
 from .model import (
     ArfModel,
     MlpArfModel,
+    russian_roulette_of_theta,
     Mlp,
     resolve_device,
     FILE_EXTENSION,

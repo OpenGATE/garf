@@ -59,7 +59,9 @@ class TrainingParameters:
         if self.lr_schedule not in ("cosine", "constant"):
             raise ValueError(f"garf: unknown lr_schedule '{self.lr_schedule}'")
         if self.block not in BLOCKS:
-            raise ValueError(f"garf: unknown block '{self.block}', must be one of {BLOCKS}")
+            raise ValueError(
+                f"garf: unknown block '{self.block}', must be one of {BLOCKS}"
+            )
         if self.n_ensemble < 1:
             raise ValueError("garf: n_ensemble must be >= 1")
 
@@ -155,6 +157,12 @@ def train(dataset, params=None, verbose=True, **kwargs):
     p = params
     log = print if verbose else (lambda *a, **k: None)
 
+    if dataset.multiple_singles():
+        raise ValueError(
+            f"garf: {dataset.multiple_singles()} rows are further singles of a photon "
+            f"(all_singles dataset): one class per photon is not possible, count "
+            f"targets are needed (not implemented yet)"
+        )
     rr = dataset.rr
     if rr is None:
         rr = p.rr
@@ -230,7 +238,7 @@ def train(dataset, params=None, verbose=True, **kwargs):
         "hostname": socket.gethostname(),
     }
     metadata = {"training": training, "provenance": {"garf_version": garf_version()}}
-    for key in ("energy_windows", "detector"):
+    for key in ("energy_windows", "detector", "spectral"):
         if key in dataset.metadata:
             metadata[key] = dataset.metadata[key]
     model = MlpArfModel(

@@ -55,7 +55,9 @@ def write_pth(path, net, model_type, angle_param, x_mean, x_std, H, L, rr=50):
         md["model_type"] = model_type
     if angle_param is not None:
         md["angle_param"] = angle_param
-    nn = dict(model_data=md, optim=dict(model_state=[net.state_dict()], data=[{"epoch": 7}]))
+    nn = dict(
+        model_data=md, optim=dict(model_state=[net.state_dict()], data=[{"epoch": 7}])
+    )
     torch.save(nn, path)
 
 
@@ -83,7 +85,11 @@ def load(path):
 
 @pytest.mark.parametrize(
     "ref_cls, model_type, block",
-    [(RefNetV1, None, "mlp"), (RefNetV1, "Net_v1", "mlp"), (RefResNetV2, "ResNet_v2", "residual")],
+    [
+        (RefNetV1, None, "mlp"),
+        (RefNetV1, "Net_v1", "mlp"),
+        (RefResNetV2, "ResNet_v2", "residual"),
+    ],
 )
 @pytest.mark.parametrize("angle_param", [None, "acos", "atan2"])
 def test_legacy_variants(tmp_path, ref_cls, model_type, block, angle_param):
@@ -92,7 +98,10 @@ def test_legacy_variants(tmp_path, ref_cls, model_type, block, angle_param):
     net = ref_cls(H, L, 3).eval()
     u, E = directions()
     if angle_param == "atan2":
-        angles = (np.degrees(np.arccos(u[:, 2])), np.degrees(np.arctan2(u[:, 1], u[:, 0])))
+        angles = (
+            np.degrees(np.arccos(u[:, 2])),
+            np.degrees(np.arctan2(u[:, 1], u[:, 0])),
+        )
         x_mean, x_std = np.array([30.0, 0.0, 0.13]), np.array([17.0, 100.0, 0.02])
     else:
         angles = (np.degrees(np.arccos(u[:, 1])), np.degrees(np.arccos(u[:, 0])))

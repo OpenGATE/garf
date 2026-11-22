@@ -183,5 +183,8 @@ def test_detector_mps_equals_cpu():
     d_mps = new_detector(hit_slice=True, model=load_model(), device="mps")
     d_mps.add(batch)
     np.testing.assert_allclose(
-        d_mps.image_arrays.cpu().numpy(), d_cpu.image_arrays.numpy(), rtol=1e-3, atol=1e-6
+        d_mps.image_arrays.cpu().numpy(),
+        d_cpu.image_arrays.numpy(),
+        rtol=1e-3,
+        atol=1e-6,
     )

@@ -7,6 +7,13 @@ optionally its weight.
 
 ROOT file, tree "ARF (training)", written by the GATE ARFTrainingDatasetActor:
 - v3 datasets: E, ux, uy, uz, window [, weight]
+- GATE >= 10.2: E, Theta, Phi, window [, weight] [, edep, event_id]: with
+  all_singles, one row per single (measured energy edep before the window
+  split; the rows of one photon share event_id, a photon with no single has
+  edep = 0); the weight column is the Russian roulette factor of the row
+  (metadata "weight_column": "russian_roulette"): constant Russian roulette
+  (rr): not a loss weight, rr is corrected at prediction; direction-dependent
+  (rr_theta): the factors are the loss weights, rr = 1
 - old datasets: E, Theta, Phi, window (or w): the meaning of the angles
   depends on the GATE version, so the convention must be given
   (legacy_acos for GATE 9 and GATE <= 10.0.2, theta_phi for 10.0.3 to 10.1.2).
@@ -35,6 +42,8 @@ class TrainingDataset:
     window: np.ndarray  # int: 0 = not detected, 1..n = energy windows
     weight: np.ndarray = None  # None = all 1
     metadata: dict = field(default_factory=dict)
+    edep: np.ndarray = None  # measured energy of the single (MeV), 0 = none
+    event_id: np.ndarray = None  # rows of one photon share it (contiguous)
 
     def __post_init__(self):
         self.window = np.asarray(self.window).astype(np.int64)
@@ -42,8 +51,10 @@ class TrainingDataset:
         for name in ("ux", "uy", "uz", "window"):
             if len(getattr(self, name)) != n:
                 raise ValueError(f"garf: dataset column '{name}' has a wrong length")
-        if self.weight is not None and len(self.weight) != n:
-            raise ValueError("garf: dataset column 'weight' has a wrong length")
+        for name in ("weight", "edep", "event_id"):
+            a = getattr(self, name)
+            if a is not None and len(a) != n:
+                raise ValueError(f"garf: dataset column '{name}' has a wrong length")
         if n and self.window.min() < 0:
             raise ValueError("garf: negative window id in the dataset")
 
@@ -66,16 +77,28 @@ class TrainingDataset:
     def rr(self):
         return self.metadata.get("rr")
 
+    def multiple_singles(self):
+        """Number of rows that are not the first single of their photon
+        (all_singles datasets: a photon can give several singles)."""
+        if self.event_id is None or len(self) < 2:
+            return 0
+        ev = np.asarray(self.event_id)
+        return int((ev[1:] == ev[:-1]).sum())
+
     def subset(self, index):
-        w = None if self.weight is None else self.weight[index]
+        def sub(a):
+            return None if a is None else a[index]
+
         return TrainingDataset(
             self.ux[index],
             self.uy[index],
             self.uz[index],
             self.E[index],
             self.window[index],
-            w,
+            sub(self.weight),
             dict(self.metadata),
+            sub(self.edep),
+            sub(self.event_id),
         )
 
     def split(self, validation_fraction, seed=None):
@@ -154,7 +177,19 @@ def load_training_dataset(filename, angle_convention=None):
             f"garf: '{filename}' needs ux, uy, uz (or Theta, Phi) columns, has {keys}"
         )
     weight = a["weight"] if "weight" in keys else None
-    return TrainingDataset(ux, uy, uz, a["E"], window, weight, metadata)
+    if metadata.get("weight_column") == "russian_roulette":
+        if metadata.get("rr_theta") is None:
+            # constant Russian roulette: corrected with rr at prediction
+            weight = None
+        else:
+            # direction-dependent Russian roulette: the factors are loss
+            # weights (importance weights), the network learns the
+            # detection probabilities directly (a correction after the
+            # training would need the network to follow the steps of rr)
+            metadata["rr"] = 1.0
+    edep = a["edep"] if "edep" in keys else None
+    event_id = a["event_id"] if "event_id" in keys else None
+    return TrainingDataset(ux, uy, uz, a["E"], window, weight, metadata, edep, event_id)
 
 
 def write_training_dataset(filename, dataset):
@@ -169,8 +204,9 @@ def write_training_dataset(filename, dataset):
         "uz": dataset.uz,
         "window": dataset.window.astype(np.float64),
     }
-    if dataset.weight is not None:
-        cols["weight"] = dataset.weight
+    for name in ("weight", "edep", "event_id"):
+        if getattr(dataset, name) is not None:
+            cols[name] = getattr(dataset, name)
     with uproot.recreate(filename) as f:
         f[TREE_NAME] = cols
     meta = {

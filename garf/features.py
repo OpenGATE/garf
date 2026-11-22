@@ -85,7 +85,9 @@ def compute_features(features, ux, uy, uz, E, params=None):
             raise ValueError("garf: phi0_deg 'auto' must be resolved (training)")
         theta = torch.rad2deg(torch.arccos(torch.clamp(uz, -1, 1)))
         period = 360.0 / p["fold"]
-        psi = torch.remainder(torch.rad2deg(torch.atan2(uy, ux)) - p["phi0_deg"], period)
+        psi = torch.remainder(
+            torch.rad2deg(torch.atan2(uy, ux)) - p["phi0_deg"], period
+        )
         psi = torch.minimum(psi, period - psi)
         return torch.stack((theta, psi, E), dim=1)
     if features == "symmetric":
