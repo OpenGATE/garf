@@ -70,9 +70,7 @@ class LutArfModel(ArfModel):
         self.probs = torch.as_tensor(probs, dtype=torch.float32)  # (nt, np, nE, nc)
         self.edges = [torch.as_tensor(e, dtype=torch.float64) for e in edges]
         self.counts = torch.as_tensor(counts, dtype=torch.float32)  # detected entries
-        self.counts0 = torch.as_tensor(
-            counts0, dtype=torch.float32
-        )  # kept non-detected
+        self.counts0 = torch.as_tensor(counts0, dtype=torch.float32)  # kept non-detected
         if self.probs.shape[-1] != self.n_channels:
             raise ValueError("garf: table and n_channels do not match")
         self._centres = [0.5 * (e[1:] + e[:-1]) for e in self.edges]
@@ -133,10 +131,7 @@ class LutArfModel(ArfModel):
         (1 - p_det) sqrt(1 / d + 1 / n0) (inf without detected entries)."""
         d, n0 = self.counts, self.counts0
         q = 1 - self.probs[..., 1:].sum(dim=-1).cpu()
-        e = q * torch.sqrt(
-            1 / d.clamp(min=1)
-            + torch.where(n0 > 0, 1 / n0.clamp(min=1), torch.zeros_like(n0))
-        )
+        e = q * torch.sqrt(1 / d.clamp(min=1) + torch.where(n0 > 0, 1 / n0.clamp(min=1), torch.zeros_like(n0)))
         return torch.where(d > 0, e, torch.full_like(d, np.inf))
 
 
@@ -169,10 +164,7 @@ def build_lut(
     fp, symmetry = resolve_dataset_feature_params(
         features, dict(fold=fold, phi0_deg=phi0_deg), dataset, log
     )
-    t = [
-        torch.from_numpy(np.asarray(a, dtype=np.float64))
-        for a in (dataset.ux, dataset.uy, dataset.uz, dataset.E)
-    ]
+    t = [torch.from_numpy(np.asarray(a, dtype=np.float64)) for a in (dataset.ux, dataset.uy, dataset.uz, dataset.E)]
     x = compute_features(features, *t, params=fp).numpy()
     if theta_edges is None:
         theta_edges = default_theta_edges(max(90.0, float(x[:, 0].max()) + 1e-6))
@@ -183,11 +175,7 @@ def build_lut(
     edges = [np.asarray(theta_edges, float), phi_edges, np.asarray(e_edges, float)]
     n_channels = dataset.n_channels
     window = np.asarray(dataset.window)
-    w = (
-        np.ones(len(window))
-        if dataset.weight is None
-        else np.asarray(dataset.weight, float)
-    )
+    w = np.ones(len(window)) if dataset.weight is None else np.asarray(dataset.weight, float)
     shape = tuple(len(e) - 1 for e in edges)
     ii = [np.digitize(x[:, a], edges[a]) - 1 for a in range(3)]
     inside = np.all([(i >= 0) & (i < n) for i, n in zip(ii, shape)], axis=0)
@@ -209,9 +197,7 @@ def build_lut(
     for c in range(1, n_channels):
         counts += np.bincount(flat[window[inside] == c], minlength=np.prod(shape))
     counts = counts.reshape(shape)
-    counts0 = np.bincount(flat[window[inside] == 0], minlength=np.prod(shape)).reshape(
-        shape
-    )
+    counts0 = np.bincount(flat[window[inside] == 0], minlength=np.prod(shape)).reshape(shape)
     filled = (counts > 0).mean()
     log(
         f"garf lut: table {shape[0]} theta x {shape[1]} phi x {shape[2]} E x "

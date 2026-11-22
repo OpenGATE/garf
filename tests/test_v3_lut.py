@@ -75,9 +75,7 @@ def test_lut_recovers_probabilities(rr):
     ds = star_dataset_theta(n=600_000 * rr, phi0=10.0)
     if rr > 1:
         ds = subsample_rr(ds, rr)
-    theta_edges = np.concatenate(
-        [np.arange(0, 4.01, 0.25), np.geomspace(4, 41, 12)[1:]]
-    )
+    theta_edges = np.concatenate([np.arange(0, 4.01, 0.25), np.geomspace(4, 41, 12)[1:]])
     m = garf.build_lut(ds, theta_edges=theta_edges, n_phi=6, n_e=1, verbose=False)
     assert m.feature_params["phi0_deg"] == pytest.approx(10.0, abs=1.5)
     p, true = lut_errors(m)
@@ -89,9 +87,7 @@ def test_lut_recovers_probabilities(rr):
     err = m.relative_error()
     assert torch.isfinite(err[:16]).all() and err[:16].max() < 0.3
     # rows sum to 1
-    q = m.predict(
-        *[np.array([0.1, 0.2])] * 2, np.array([0.97, 0.95]), np.array([0.14, 0.14])
-    )
+    q = m.predict(*[np.array([0.1, 0.2])] * 2, np.array([0.97, 0.95]), np.array([0.14, 0.14]))
     np.testing.assert_allclose(q.sum(axis=1), 1, atol=1e-6)
 
 
@@ -120,13 +116,7 @@ def test_lut_with_projector():
     a = rng.uniform(-np.pi, np.pi, n)
     s = np.sqrt(1 - uz * uz)
     ix, iy, values = proj.project(
-        m,
-        rng.uniform(-30, 30, n),
-        rng.uniform(-30, 30, n),
-        s * np.cos(a),
-        s * np.sin(a),
-        uz,
-        np.full(n, 0.14),
+        m, rng.uniform(-30, 30, n), rng.uniform(-30, 30, n), s * np.cos(a), s * np.sin(a), uz, np.full(n, 0.14)
     )
     assert values.shape[1] == m.n_windows and values.sum() > 0
 

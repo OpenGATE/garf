@@ -16,11 +16,7 @@ FAST = dict(H=32, L=2, epochs=40, learning_rate=1e-2, batch_size=2000, device="c
 def star_probability(theta_deg, phi_deg, phi0=10.0, fold=6):
     """Detection probability: narrow core + tail with a fold-fold star."""
     core = 0.6 * np.exp(-0.5 * (theta_deg / 1.5) ** 2)
-    tail = (
-        0.05
-        * np.exp(-theta_deg / 15)
-        * (1 + 0.6 * np.cos(np.radians(fold * (phi_deg - phi0))))
-    )
+    tail = 0.05 * np.exp(-theta_deg / 15) * (1 + 0.6 * np.cos(np.radians(fold * (phi_deg - phi0))))
     return core + tail / (1 + np.exp(-(theta_deg - 2) / 0.3))  # smooth step at 2 deg
 
 
@@ -125,10 +121,7 @@ def test_train_symmetric_auto_phi0(tmp_path):
     m.save(f)
     m2 = garf.ArfModel.load(f, device="cpu")
     assert m2.feature_params == m.feature_params
-    np.testing.assert_allclose(
-        m2.predict(ux, uy, uz, np.full(2, 0.14)),
-        m.predict(ux, uy, uz, np.full(2, 0.14)),
-    )
+    np.testing.assert_allclose(m2.predict(ux, uy, uz, np.full(2, 0.14)), m.predict(ux, uy, uz, np.full(2, 0.14)))
 
 
 def test_train_symmetric_fixed_phi0():
