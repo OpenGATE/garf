@@ -103,7 +103,10 @@ def _resolve_training_feature_params(p, dataset, log):
             fp["phi0_deg"] = 0.0
         else:
             fp["phi0_deg"] = round(sym["phi0_deg"], 2)
-        log(f"garf train: {fp['fold']}-fold symmetry, phi0 = {fp['phi0_deg']} deg (measured)")
+            log(
+                f"garf train: {fp['fold']}-fold symmetry, "
+                f"phi0 = {fp['phi0_deg']} deg (measured)"
+            )
     return fp, sym
 
 
