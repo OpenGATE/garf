@@ -57,7 +57,9 @@ def test_legacy_pth_metadata(legacy_model):
     assert m.features == "legacy_acos"
     assert m.n_channels == 3 and m.n_windows == 2
     assert m.rr == 50
-    assert m.architecture == dict(n_in=3, H=200, L=3, n_out=3, activation="relu")
+    assert m.architecture == dict(
+        n_in=3, H=200, L=3, n_out=3, activation="relu", block="mlp"
+    )
     assert m.metadata["training"]["stored_epochs"] == [0, 20]
     assert m.metadata["training"]["selected_epoch"] == 20
 

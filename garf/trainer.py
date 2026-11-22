@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 
 from .features import DEFAULT_FEATURES, check_features, compute_features
-from .model import Mlp, MlpArfModel, garf_version, resolve_device
+from .model import BLOCKS, MlpArfModel, garf_version, resolve_device
 
 
 @dataclass
@@ -31,6 +31,7 @@ class TrainingParameters:
     features: str = DEFAULT_FEATURES
     H: int = 200
     L: int = 3
+    block: str = "mlp"  # "mlp" | "residual" (L blocks of 2 layers)
     learning_rate: float = 1e-3
     lr_schedule: str = "cosine"  # "cosine" | "constant"
     epochs: int = 100
@@ -47,6 +48,8 @@ class TrainingParameters:
         check_features(self.features)
         if self.lr_schedule not in ("cosine", "constant"):
             raise ValueError(f"garf: unknown lr_schedule '{self.lr_schedule}'")
+        if self.block not in BLOCKS:
+            raise ValueError(f"garf: unknown block '{self.block}', must be one of {BLOCKS}")
         if self.n_ensemble < 1:
             raise ValueError("garf: n_ensemble must be >= 1")
 
@@ -150,7 +153,9 @@ def train(dataset, params=None, verbose=True, **kwargs):
         f"{n_channels} channels, features {p.features}, device {device}, seed {seed}"
     )
 
-    architecture = dict(n_in=3, H=p.H, L=p.L, n_out=n_channels, activation="relu")
+    architecture = dict(
+        n_in=3, H=p.H, L=p.L, n_out=n_channels, activation="relu", block=p.block
+    )
     nets, histories = [], []
     start = time.strftime("%Y-%m-%d %H:%M:%S")
     for k in range(p.n_ensemble):
@@ -197,7 +202,7 @@ def _train_one(architecture, xt, yt, wt, xv, yv, wv, use_val, p, seed, device, l
     torch.manual_seed(seed)
     gen = torch.Generator(device="cpu").manual_seed(seed)
     a = architecture
-    net = Mlp(a["n_in"], a["H"], a["L"], a["n_out"]).to(device)
+    net = MlpArfModel.build_net(a).to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=p.learning_rate)
     scheduler = None
     if p.lr_schedule == "cosine":

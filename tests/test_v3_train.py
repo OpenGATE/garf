@@ -48,6 +48,19 @@ def test_training_recovers_known_probabilities(features):
     assert h["selected_loss"] == min(h["validation_loss"])
 
 
+def test_training_residual_block(tmp_path):
+    m = garf.train(
+        dataset(), block="residual", seed=1234, early_stopping=0, verbose=False, **FAST
+    )
+    e = errors(m)
+    assert e.mean() < 0.015 and e.max() < 0.12
+    assert m.architecture["block"] == "residual"
+    f = tmp_path / "r.garf"
+    m.save(f)
+    m2 = garf.ArfModel.load(f, device="cpu")
+    assert m2.architecture["block"] == "residual"
+
+
 @pytest.mark.filterwarnings("ignore:garf. an input feature is constant")
 def test_training_uses_the_whole_dataset():
     """Ordered dataset (first half channel 0, second half channel 1): see test_known_bugs."""

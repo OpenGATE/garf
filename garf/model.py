@@ -73,6 +73,44 @@ class Mlp(torch.nn.Module):
         return self.fc3(x)
 
 
+class ResidualBlock(torch.nn.Module):
+    """x -> relu(x + linear2(relu(linear1(x))))"""
+
+    def __init__(self, H):
+        super().__init__()
+        self.linear1 = torch.nn.Linear(H, H)
+        self.linear2 = torch.nn.Linear(H, H)
+
+    def forward(self, x):
+        r = self.linear2(torch.clamp(self.linear1(x), min=0))
+        return torch.clamp(x + r, min=0)
+
+
+class ResMlp(torch.nn.Module):
+    """
+    n_in -> H (ReLU) -> L residual blocks (2 layers each) -> n_out.
+    Layer names (fc1, residual_layers.<i>.linear1/2, output_layer) are those
+    of ResNet_v2 (garf 'models' branch, 2025), so that its states can be loaded.
+    """
+
+    def __init__(self, n_in, H, L, n_out, activation="relu"):
+        super().__init__()
+        if activation != "relu":
+            raise ValueError(f"garf: unsupported activation '{activation}'")
+        self.fc1 = torch.nn.Linear(n_in, H)
+        self.residual_layers = torch.nn.ModuleList([ResidualBlock(H) for _ in range(L)])
+        self.output_layer = torch.nn.Linear(H, n_out)
+
+    def forward(self, x):
+        x = torch.clamp(self.fc1(x), min=0)
+        for layer in self.residual_layers:
+            x = layer(x)
+        return self.output_layer(x)
+
+
+BLOCKS = ("mlp", "residual")
+
+
 def apply_russian_roulette(probs, rr):
     """The training dataset kept 1/rr of the non-detected photons: undo it."""
     if rr == 1:
@@ -248,8 +286,13 @@ class MlpArfModel(ArfModel):
 
     @staticmethod
     def build_net(architecture):
+        """architecture: n_in, H, L, n_out, activation, block ('mlp' or 'residual')."""
         a = architecture
-        return Mlp(a["n_in"], a["H"], a["L"], a["n_out"], a.get("activation", "relu"))
+        block = a.get("block", "mlp")
+        if block not in BLOCKS:
+            raise ValueError(f"garf: unknown network block '{block}', must be one of {BLOCKS}")
+        cls = Mlp if block == "mlp" else ResMlp
+        return cls(a["n_in"], a["H"], a["L"], a["n_out"], a.get("activation", "relu"))
 
 
 def read_garf_metadata(path):
@@ -306,11 +349,21 @@ def load_garf(path):
     raise ValueError(f"garf: unknown model type '{model_type}' in '{path}'")
 
 
+# legacy .pth: model_type -> network block, angle_param -> features
+LEGACY_MODEL_TYPES = {"Net_v1": "mlp", "ResNet_v2": "residual"}
+LEGACY_ANGLE_PARAMS = {"acos": "legacy_acos", "atan2": "theta_phi"}
+
+
 def load_legacy_pth(path, state_index=-1):
     """
-    garf <= 2.11 .pth file (pickle: only for trusted files). Features are
-    legacy_acos. The stored states are those of the training epochs kept by
-    garf_train; garf <= 2.11 always used the last one.
+    garf <= 2.11 .pth file (pickle: only for trusted files). The stored
+    states are those of the training epochs kept by garf_train; garf <= 2.11
+    always used the last one.
+
+    Features: legacy_acos, except for the files of the garf 'models' branch
+    (2025) with angle_param = 'atan2': theta_phi. That branch also had the
+    ResNet_v2 network (block 'residual') and used the straight shift at
+    inference (recorded in the metadata as provenance.inference_shift_mode).
     """
     warnings.warn(
         f"garf: '{path}' is a legacy .pth model (garf <= 2.11); "
@@ -320,11 +373,22 @@ def load_legacy_pth(path, state_index=-1):
     nn = torch.load(str(path), map_location="cpu", weights_only=False)
     md = nn["model_data"]
     states = nn["optim"]["model_state"]
-    epochs = [d.get("epoch") for d in nn["optim"]["data"]]
+    epochs = [d.get("epoch") for d in nn["optim"].get("data", [{}] * len(states))]
     state = states[state_index]
     n_channels = int(md["n_ene_win"])
+    model_type = md.get("model_type", "Net_v1")
+    if model_type not in LEGACY_MODEL_TYPES:
+        raise ValueError(
+            f"garf: '{path}' has model_type '{model_type}', not supported "
+            f"(supported: {sorted(LEGACY_MODEL_TYPES)})"
+        )
+    angle_param = md.get("angle_param", "acos")
+    if angle_param not in LEGACY_ANGLE_PARAMS:
+        raise ValueError(f"garf: '{path}' has unknown angle_param '{angle_param}'")
+    features = LEGACY_ANGLE_PARAMS[angle_param]
     architecture = dict(n_in=3, H=int(md["H"]), L=int(md["L"]), n_out=n_channels)
     architecture["activation"] = "relu"
+    architecture["block"] = LEGACY_MODEL_TYPES[model_type]
     net = MlpArfModel.build_net(architecture)
     net.load_state_dict(state)
     rr = md["rr"] if "rr" in md else md["RR"]
@@ -335,15 +399,16 @@ def load_legacy_pth(path, state_index=-1):
     training["selected_epoch"] = epochs[state_index]
     if "loss_values" in md:
         training["loss_values"] = md["loss_values"]
-    metadata = {
-        "training": training,
-        "provenance": {"legacy_pth": Path(path).name, "garf_version": "<= 2.11"},
-    }
+    provenance = {"legacy_pth": Path(path).name, "garf_version": "<= 2.11"}
+    if angle_param == "atan2":
+        provenance["garf_version"] = "models branch (2025)"
+        provenance["inference_shift_mode"] = "straight"
+    metadata = {"training": training, "provenance": provenance}
     return MlpArfModel(
         [net],
         md["x_mean"],
         md["x_std"],
-        features="legacy_acos",
+        features=features,
         n_channels=n_channels,
         rr=rr,
         architecture=architecture,

@@ -63,6 +63,9 @@ def garf_convert(pth_filename, output, state_index, distance_to_crystal, detecto
     print(f"Features    : {model.features}")
     print(f"Channels    : {model.n_channels} (RR = {model.rr:g})")
     print(f"Architecture: {model.architecture}")
+    shift = model.metadata.get("provenance", {}).get("inference_shift_mode")
+    if shift is not None:
+        print(f"Note        : this model was used with shift_mode='{shift}' at inference")
     print(f"Output      : {output} ({output.stat().st_size / 1e6:.2f} MB)")
 
 
