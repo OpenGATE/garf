@@ -99,7 +99,9 @@ class TrainingDataset:
 def load_training_dataset(filename, angle_convention=None):
     """
     Read a training dataset ROOT file (v3 or old format, see the module doc).
-    angle_convention is required for old datasets (Theta, Phi), ignored otherwise.
+    For datasets with Theta, Phi, the angle convention is angle_convention if
+    given, else the one of the sidecar JSON file (key "angle_convention"),
+    else an error. Ignored for datasets with ux, uy, uz.
     """
     import uproot
 
@@ -129,6 +131,9 @@ def load_training_dataset(filename, angle_convention=None):
         ux, uy, uz = a["ux"], a["uy"], a["uz"]
         metadata["format"] = "directions"
     elif {"Theta", "Phi"} <= keys:
+        if angle_convention is None:
+            # written by the GATE training actor (>= 10.2) in the sidecar
+            angle_convention = metadata.get("angle_convention")
         if angle_convention is None:
             raise ValueError(
                 f"garf: '{filename}' is an old dataset (Theta, Phi): the angle "

@@ -69,6 +69,26 @@ def test_old_dataset(tmp_path, convention, window_key):
     assert r.metadata["angle_convention"] == convention
 
 
+def test_old_dataset_convention_from_sidecar(tmp_path):
+    """The GATE training actor writes the convention in <name>.json."""
+    import torch
+
+    ds = random_dataset()
+    t = [torch.from_numpy(a) for a in (ds.ux, ds.uy, ds.uz, ds.E)]
+    feats = garf.compute_features("theta_phi", *t).numpy()
+    f = tmp_path / "old.root"
+    write_old(f, feats[:, 0], feats[:, 1], ds.E, ds.window.astype(float))
+    f.with_suffix(".json").write_text(
+        json.dumps({"angle_convention": "theta_phi", "rr": 20})
+    )
+    r = garf.load_training_dataset(f)
+    np.testing.assert_allclose(r.ux, ds.ux, atol=1e-9)
+    assert r.rr == 20 and r.metadata["angle_convention"] == "theta_phi"
+    # an explicit argument wins (and is checked against the angles)
+    with pytest.raises(ValueError, match="theta_phi dataset"):
+        garf.load_training_dataset(f, angle_convention="legacy_acos")
+
+
 def test_old_dataset_wrong_convention(tmp_path):
     ds = random_dataset()
     import torch
