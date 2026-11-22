@@ -5,6 +5,7 @@ the legacy model, legacy features and legacy shift must give the same numbers,
 now from the physical quantities passed by GATE (x, y, ux, uy, uz, E, w).
 """
 
+import os
 import warnings
 
 import numpy as np
@@ -318,3 +319,41 @@ def test_garf_convert_cli(tmp_path, golden):
     )
     np.testing.assert_array_equal(ix, golden["v"])
     np.testing.assert_allclose(values, golden["w_pred"][:, 1:], rtol=RTOL, atol=ATOL)
+
+
+@pytest.mark.skipif(
+    not torch.backends.mps.is_available() or "GITHUB_ACTIONS" in os.environ,
+    reason="needs a usable mps device (detected but not usable on GitHub macOS runners)",
+)
+def test_projector_mps_equals_cpu(v034_model_cpu_and_mps):
+    """A non-contiguous mps -> cpu copy gave garbage images (found with GATE)."""
+    m_cpu, m_mps = v034_model_cpu_and_mps
+    rng = np.random.default_rng(3)
+    n = 20_000
+    u = rng.normal(size=(n, 3))
+    u[:, 2] = np.abs(u[:, 2]) + 0.5
+    u /= np.linalg.norm(u, axis=1, keepdims=True)
+    x, y = rng.uniform(-200, 200, (2, n))
+    E = rng.uniform(0.07, 0.15, n)
+    w = rng.uniform(0.5, 2, n)
+    for hit_slice in (False, True):
+        pr = garf.ArfProjector((64, 64), (8.0, 8.0), 74.625, hit_slice=hit_slice)
+        images = []
+        for m in (m_cpu, m_mps):
+            img = np.zeros(pr.image_shape(m))
+            pr.accumulate(img, m, x, y, *u.T, E, w)
+            images.append(img)
+        np.testing.assert_allclose(images[1], images[0], rtol=1e-4, atol=1e-9)
+        _, _, v = pr.project(m_mps, x, y, *u.T, E, w)
+        _, _, v0 = pr.project(m_cpu, x, y, *u.T, E, w)
+        np.testing.assert_allclose(v, v0, rtol=1e-4, atol=1e-9)
+
+
+@pytest.fixture
+def v034_model_cpu_and_mps():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return (
+            garf.ArfModel.load(PTH_V034, device="cpu"),
+            garf.ArfModel.load(PTH_V034, device="mps"),
+        )

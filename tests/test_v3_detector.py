@@ -4,6 +4,7 @@ v3 GarfDetector (standalone, used by gaga-phsp) against the garf 2.11
 GarfDetector (numpy and torch paths), on the same particles.
 """
 
+import os
 import warnings
 
 import numpy as np
@@ -169,3 +170,18 @@ def test_missing_parameter():
     d.model = load_model()
     with pytest.raises(ValueError, match="image_size"):
         d.initialize(GANTRY)
+
+
+@pytest.mark.skipif(
+    not torch.backends.mps.is_available() or "GITHUB_ACTIONS" in os.environ,
+    reason="needs a usable mps device (detected but not usable on GitHub macOS runners)",
+)
+def test_detector_mps_equals_cpu():
+    batch = particles(20_000)
+    d_cpu = new_detector(hit_slice=True)
+    d_cpu.add(batch)
+    d_mps = new_detector(hit_slice=True, model=load_model(), device="mps")
+    d_mps.add(batch)
+    np.testing.assert_allclose(
+        d_mps.image_arrays.cpu().numpy(), d_cpu.image_arrays.numpy(), rtol=1e-3, atol=1e-6
+    )

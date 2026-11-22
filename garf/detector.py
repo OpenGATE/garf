@@ -14,7 +14,7 @@ Used by gaga-phsp (GAN source + ARF).
 import numpy as np
 import torch
 
-from .arrays import is_numpy
+from .arrays import is_numpy, move
 from .model import ArfModel, resolve_device
 from .projector import ArfProjector
 
@@ -86,9 +86,9 @@ class GarfDetector:
             g * self.initial_plane_rotation for g in gantry_rotations
         ]
         m = np.array([r.as_matrix() for r in self.plane_rotations])
-        self._matrices = torch.as_tensor(m).to(self._device, self._dtype)
+        self._matrices = move(torch.as_tensor(m), self._device, self._dtype)
         c = np.array([r.apply([0, 0, self.radius]) for r in self.plane_rotations])
-        self._centers = torch.as_tensor(c).to(self._device, self._dtype)
+        self._centers = move(torch.as_tensor(c), self._device, self._dtype)
 
         shape = (len(self.plane_rotations),) + self.projector.image_shape(self.model)
         self.image_arrays = torch.zeros(shape, dtype=self._dtype, device=self._device)
@@ -138,7 +138,7 @@ class GarfDetector:
             raise ValueError(
                 f"garf: batch must be (n, 7): E, x, y, z, ux, uy, uz; shape is {tuple(batch.shape)}"
             )
-        batch = batch.to(self._device, self._dtype)
+        batch = move(batch, self._device, self._dtype)
         bs = int(self.batch_size)
         n_inside = 0
         with torch.no_grad():

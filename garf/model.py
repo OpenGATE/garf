@@ -15,7 +15,7 @@ from pathlib import Path
 
 import torch
 
-from .arrays import check_same_length, is_numpy, to_output, to_tensor
+from .arrays import check_same_length, is_numpy, to_output, to_tensor, move
 from .features import check_features, compute_features
 
 FORMAT = "garf-arf"
@@ -225,9 +225,9 @@ class MlpArfModel(ArfModel):
 
     def _probs(self, x):
         # normalisation in the input dtype (float64 for numpy inputs, as garf <= 2.11)
-        mean = self.x_mean.to(device=x.device, dtype=x.dtype)
-        std = self.x_std.to(device=x.device, dtype=x.dtype)
-        x = ((x - mean) / std).float().to(self.device)
+        mean = move(self.x_mean, x.device, x.dtype)
+        std = move(self.x_std, x.device, x.dtype)
+        x = move((x - mean) / std, self.device, torch.float32)
         probs = None
         for net in self.nets:
             p = apply_russian_roulette(torch.softmax(net(x), dim=1), self.rr)

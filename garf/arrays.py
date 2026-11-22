@@ -16,6 +16,21 @@ def is_numpy(*arrays):
     return True
 
 
+def move(t, device=None, dtype=None):
+    """
+    t.to(device, dtype) in two steps: with torch 2.x, a copy from mps to the
+    cpu that also changes the dtype gives zeros or stale values. Copy first,
+    then cast (on the target device; cpu -> mps: cast first, mps has no float64).
+    """
+    device = t.device if device is None else torch.device(device)
+    dtype = t.dtype if dtype is None else dtype
+    if t.device == device:
+        return t.to(dtype)
+    if device.type == "mps":
+        return t.to(dtype).to(device)
+    return t.to(device).to(dtype)
+
+
 def to_tensor(a, like=None):
     """
     numpy (or list, scalar) -> torch float64 on CPU; torch tensors are kept.
@@ -27,7 +42,7 @@ def to_tensor(a, like=None):
         return a
     t = torch.as_tensor(np.asarray(a, dtype=np.float64))
     if like is not None:
-        t = t.to(device=like.device, dtype=like.dtype)
+        t = move(t, like.device, like.dtype)
     return t
 
 

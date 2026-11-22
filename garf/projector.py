@@ -23,7 +23,7 @@ import warnings
 import numpy as np
 import torch
 
-from .arrays import check_same_length, is_numpy, to_output, to_tensor
+from .arrays import check_same_length, is_numpy, to_output, to_tensor, move
 
 SHIFT_MODES = ("legacy", "straight")
 
@@ -116,7 +116,7 @@ class ArfProjector:
         ix, iy, inside = self._pixels(x, y, ux, uy, uz, self.distance(model))
         ix, iy = ix[inside], iy[inside]
         probs = model.predict(ux[inside], uy[inside], uz[inside], E[inside])
-        probs = probs.to(device=x.device, dtype=x.dtype)
+        probs = move(probs, x.device, x.dtype)
         values = probs[:, 1:]
         if w is not None:
             values = values * w[inside].unsqueeze(1)
@@ -176,5 +176,5 @@ class ArfProjector:
         img.index_add_(
             1,
             flat.to(img.device),
-            values.T.to(device=img.device, dtype=img.dtype),
+            move(values, img.device, img.dtype).T,
         )
