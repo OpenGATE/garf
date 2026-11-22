@@ -102,8 +102,11 @@ def spectral_classes(
         info = dict(representation="absolute", stage=stage, edges_mev=edges.tolist())
     else:
         width = float(edges[1] - edges[0]) if loss_bin_mev is None else loss_bin_mev
-        n_loss = int(np.ceil((edges[-1] - edges[0] - loss_min_mev) / width)) + 1
         E = np.asarray(dataset.E, float)
+        # the largest loss: the highest incident energy measured in the
+        # lowest bin (wider than the bins when E goes above them, e.g. Lu177)
+        e_top = max(edges[-1], float(E[det].max()) if det.any() else edges[-1])
+        n_loss = int(np.ceil((e_top - edges[0] - loss_min_mev) / width)) + 1
         e = np.zeros_like(E)
         e[det] = centre[w[det] - 1]
         k = np.clip(np.rint((E - e - loss_min_mev) / width).astype(int), 0, n_loss - 1)
@@ -198,6 +201,12 @@ class SpectralArfModel(ArfModel):
             )
             self._width = float(self.info["loss_bin_mev"])
 
+        # the energy windows saved with the model (set_energy_windows can
+        # change them at simulation time)
+        if self.info.get("windows_kev") is not None:
+            res = self.info.get("resolution")
+            self.set_energy_windows(self.info["windows_kev"], None if res is None else dict(res), self.info.get("window_names"))
+
     @property
     def n_windows(self):
         return 0 if self.windows_mev is None else len(self.windows_mev)
@@ -206,7 +215,7 @@ class SpectralArfModel(ArfModel):
     def stage(self):
         return self.info["stage"]
 
-    def set_energy_windows(self, windows_kev, resolution=None):
+    def set_energy_windows(self, windows_kev, resolution=None, names=None):
         """windows_kev: list of (min, max) in keV. resolution ("deposit"
         stage only; the measured energy is already blurred): dict(method
         'InverseSquare' | 'Linear', resolution (relative FWHM at the
@@ -217,7 +226,11 @@ class SpectralArfModel(ArfModel):
             )
         if self.stage == "deposit" and resolution is None:
             raise ValueError("garf: deposited-energy model, give the energy resolution")
+        windows_kev = [(float(a), float(b)) for a, b in windows_kev]
         self.windows_mev = [(a / 1000.0, b / 1000.0) for a, b in windows_kev]
+        self.info["windows_kev"] = [list(w) for w in windows_kev]
+        self.info["resolution"] = None if resolution is None else dict(resolution)
+        self.info["window_names"] = None if names is None else list(names)
         if resolution is not None:
             res = dict(resolution)
             res["reference_mev"] = res.pop("reference_kev") / 1000.0
@@ -260,5 +273,7 @@ class SpectralArfModel(ArfModel):
         return to_output(out, numpy_out)
 
     def save(self, path):
+        # metadata set on the wrapper (e.g. the detector) are saved too
+        self.inner.metadata.update(self.metadata)
         self.inner.metadata["spectral"] = self.info
         self.inner.save(path)

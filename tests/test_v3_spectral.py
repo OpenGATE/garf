@@ -172,5 +172,25 @@ def test_measured_model_windows(tmp_path, representation):
     np.testing.assert_allclose(got, expected, rtol=0.1)
     f = tmp_path / "m.garf"
     m.save(f)
-    m2 = garf.ArfModel.load(f, device="cpu").set_energy_windows(WINDOWS)
-    assert m2.stage == "measured"
+    m2 = garf.ArfModel.load(f, device="cpu")  # the windows come back
+    assert m2.stage == "measured" and m2.n_windows == len(WINDOWS)
+    got2 = m2.predict(np.array([np.sin(t)]), np.array([0.0]), np.array([np.cos(t)]), np.array([0.1405]))[0, 1:]
+    np.testing.assert_allclose(got2, got, rtol=1e-6)
+    # other windows at simulation time
+    m2.set_energy_windows([(130, 151)], names=["peak"])
+    assert m2.n_windows == 1
+
+
+def test_loss_range_above_the_bins():
+    """Incident energies above the bins (e.g. Lu177 321 keV with bins up to
+    298 keV): the loss classes must cover E - lowest bin, not only the bin
+    range (no clipping, the measured energy is recovered)."""
+    n = 2000
+    E = np.full(n, 0.3218)
+    e = np.linspace(0.077, 0.297, n)  # measured energies inside the bins
+    edges = np.arange(76, 299) / 1000.0
+    k = np.digitize(e, edges)
+    ds = garf.TrainingDataset(np.zeros(n), np.zeros(n), np.ones(n), E, np.ones(n, int), metadata=dict(rr=1), edep=e)
+    sds, info = garf.spectral_classes(ds, edges, "loss")
+    loss = info["loss_min_mev"] + (sds.window - 1) * info["loss_bin_mev"]
+    np.testing.assert_allclose(E - loss, 0.5 * (edges[k - 1] + edges[k]), atol=0.6e-3)
