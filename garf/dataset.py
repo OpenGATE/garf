@@ -214,3 +214,59 @@ def write_training_dataset(filename, dataset):
     }
     if meta:
         filename.with_suffix(".json").write_text(json.dumps(meta, indent=2))
+
+
+# theta bins of the direction-dependent Russian roulette (deg): 0.25 deg in
+# the core of the response, then logarithmic (dev study of the RR)
+DEFAULT_RR_THETA_EDGES = np.concatenate(
+    [np.arange(0, 4.0, 0.25), np.geomspace(4, 90, 25)]
+).tolist()
+
+
+def detection_probability_per_theta(dataset, theta_edges=None):
+    """
+    Per theta bin: (p, d, n) with p the probability that a photon gives a
+    single (edep > 0 for all_singles datasets, else a window > 0), d the
+    detected photons, n the photons (estimated: detected + Russian roulette
+    of the kept non-detected ones). One row per photon is assumed (the
+    further singles of a photon are skipped).
+    """
+    edges = np.asarray(DEFAULT_RR_THETA_EDGES if theta_edges is None else theta_edges, float)
+    keep = np.ones(len(dataset), bool)
+    if dataset.event_id is not None and len(dataset) > 1:
+        ev = np.asarray(dataset.event_id)
+        keep[1:] = ev[1:] != ev[:-1]
+    if dataset.edep is not None:
+        det = np.asarray(dataset.edep) > 0
+    else:
+        det = np.asarray(dataset.window) > 0
+    if dataset.weight is not None:
+        w0 = np.asarray(dataset.weight, float)
+    else:
+        rr = dataset.rr if dataset.rr is not None else 1.0
+        w0 = np.full(len(dataset), float(rr))
+    weight = np.where(det, 1.0, w0)
+    th = np.degrees(np.arccos(np.clip(np.asarray(dataset.uz, float), -1, 1)))
+    i = np.clip(np.digitize(th, edges) - 1, 0, len(edges) - 2)
+    nb = len(edges) - 1
+    d = np.bincount(i[keep & det], minlength=nb).astype(float)
+    n = np.bincount(i[keep], weights=weight[keep], minlength=nb)
+    p = np.divide(d, n, out=np.zeros(nb), where=n > 0)
+    return p, d, n
+
+
+def optimal_russian_roulette(dataset, theta_edges=None, cap=500):
+    """
+    Direction-dependent Russian roulette from a (pilot) dataset: r = (1 - p)
+    / p per theta bin (as many kept non-detected as detected entries),
+    between 1 and cap (cap where no photon was detected). Returns the dict
+    {"theta_edges_deg", "values"} for the GATE training actor
+    (russian_roulette_theta_edges, russian_roulette_values) and p.
+    """
+    edges = DEFAULT_RR_THETA_EDGES if theta_edges is None else list(theta_edges)
+    p, d, n = detection_probability_per_theta(dataset, edges)
+    r = np.full(len(p), float(cap))
+    ok = p > 0
+    r[ok] = (1 - p[ok]) / p[ok]
+    r = np.clip(r, 1.0, cap)
+    return {"theta_edges_deg": [float(e) for e in edges], "values": r.tolist()}, p

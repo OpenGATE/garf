@@ -118,3 +118,18 @@ def test_all_singles_dataset(tmp_path):
         garf.train(d2, epochs=1, device="cpu", verbose=False)
     with pytest.raises(ValueError, match="count targets"):
         garf.spectral_classes(d2, edges, "absolute")
+
+
+def test_optimal_russian_roulette():
+    # pilot with the table RR_THETA, then the optimal table r = (1 - p) / p
+    ds = synthetic(n=2_000_000)
+    edges = [0, 1, 2, 3, 4, 6, 8]
+    rr, p = garf.optimal_russian_roulette(ds, edges, cap=500)
+    c = 0.5 * (np.array(edges[1:]) + np.array(edges[:-1]))
+    # p averaged over each bin (theta uniform)
+    t = np.linspace(0, 8, 8001)
+    pt = p_det(t)
+    expected = np.array([pt[(t >= a) & (t < b)].mean() for a, b in zip(edges[:-1], edges[1:])])
+    np.testing.assert_allclose(p, expected, rtol=0.05)
+    np.testing.assert_allclose(rr["values"], np.clip((1 - expected) / expected, 1, 500), rtol=0.07)
+    assert rr["theta_edges_deg"] == [float(e) for e in edges]

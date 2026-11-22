@@ -24,8 +24,11 @@ from .model import (
 )
 from .projector import ArfProjector, SHIFT_MODES
 from .dataset import (
+    DEFAULT_RR_THETA_EDGES,
     TrainingDataset,
+    detection_probability_per_theta,
     load_training_dataset,
+    optimal_russian_roulette,
     write_training_dataset,
 )
 from .trainer import TrainingParameters, train
