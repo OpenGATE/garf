@@ -23,7 +23,9 @@ def test_window_response_vs_sampling():
         x = blur_mc(np.full(400_000, e), rng)
         res = dict(RES, reference_mev=RES["reference_kev"] / 1000)
         W = garf.window_response(
-            torch.tensor([e], dtype=torch.float64), [(a / 1000, b / 1000) for a, b in WINDOWS], res
+            torch.tensor([e], dtype=torch.float64),
+            [(a / 1000, b / 1000) for a, b in WINDOWS],
+            res,
         ).numpy()[0]
         mc = [np.mean((x >= a / 1000) & (x < b / 1000)) for a, b in WINDOWS]
         np.testing.assert_allclose(W, mc, atol=3e-3)
@@ -59,18 +61,35 @@ def synthetic_spectral(n=400_000, seed=1):
 def test_spectral_model_windows(tmp_path, representation):
     ds, (th, E, det, e) = synthetic_spectral()
     edges = garf.deposit_bins_from_metadata(ds)
-    sds, info = garf.spectral_classes(ds, edges, representation)
-    net = garf.train(sds, H=64, L=2, epochs=15, batch_size=4000, learning_rate=3e-3, seed=3, device="cpu", verbose=False)
+    sds, info = garf.spectral_classes(ds, edges, representation, stage="deposit")
+    net = garf.train(
+        sds,
+        H=64,
+        L=2,
+        epochs=15,
+        batch_size=4000,
+        learning_rate=3e-3,
+        seed=3,
+        device="cpu",
+        verbose=False,
+    )
     m = garf.SpectralArfModel(net, info).set_energy_windows(WINDOWS, RES)
     # expected window probabilities for photons at 140.5 keV, theta 1 deg:
     # p_det (0.8 W(E) + 0.2 mean W(E - loss))
     rng = np.random.default_rng(5)
     t = np.radians(1.0)
     pdet = 0.5 * np.exp(-0.5 * 0.25)
-    loss = np.where(rng.uniform(size=300_000) < 0.8, 0.0, rng.uniform(0.005, 0.060, 300_000))
+    loss = np.where(
+        rng.uniform(size=300_000) < 0.8, 0.0, rng.uniform(0.005, 0.060, 300_000)
+    )
     x = blur_mc(0.1405 - loss, rng)
     expected = [pdet * np.mean((x >= a / 1000) & (x < b / 1000)) for a, b in WINDOWS]
-    got = m.predict(np.array([np.sin(t)]), np.array([0.0]), np.array([np.cos(t)]), np.array([0.1405]))[0, 1:]
+    got = m.predict(
+        np.array([np.sin(t)]),
+        np.array([0.0]),
+        np.array([np.cos(t)]),
+        np.array([0.1405]),
+    )[0, 1:]
     np.testing.assert_allclose(got, expected, rtol=0.1)
     # save / load: the spectral description comes back, windows set again
     f = tmp_path / "s.garf"
@@ -78,7 +97,80 @@ def test_spectral_model_windows(tmp_path, representation):
     m2 = garf.ArfModel.load(f, device="cpu")
     assert isinstance(m2, garf.SpectralArfModel)
     m2.set_energy_windows(WINDOWS, RES)
-    got2 = m2.predict(np.array([np.sin(t)]), np.array([0.0]), np.array([np.cos(t)]), np.array([0.1405]))[0, 1:]
+    got2 = m2.predict(
+        np.array([np.sin(t)]),
+        np.array([0.0]),
+        np.array([np.cos(t)]),
+        np.array([0.1405]),
+    )[0, 1:]
     np.testing.assert_allclose(got2, got, rtol=1e-6)
     # the projector sees the number of windows of the configuration
     assert m2.n_windows == len(WINDOWS)
+
+
+def synthetic_measured(n=400_000, seed=2):
+    """As synthetic_spectral, but the bins are of the measured (blurred)
+    energy: the end of the digitizer."""
+    ds, (th, E, det, e) = synthetic_spectral(n, seed)
+    rng = np.random.default_rng(seed + 10)
+    m = blur_mc(np.clip(e, 1e-3, None), rng)
+    edges = np.arange(10, 176) / 1000.0
+    k = np.digitize(m, edges)
+    window = np.where(det & (k >= 1) & (k <= len(edges) - 1), k, 0)
+    md = dict(
+        rr=1,
+        energy_windows=[
+            dict(name=f"b{i}", min_keV=edges[i] * 1000, max_keV=edges[i + 1] * 1000)
+            for i in range(len(edges) - 1)
+        ],
+    )
+    return garf.TrainingDataset(
+        ds.ux, ds.uy, ds.uz, ds.E, window.astype(np.int64), metadata=md
+    )
+
+
+def test_bin_window_fraction():
+    e = torch.tensor([0.1005, 0.1295, 0.150], dtype=torch.float64)
+    W = garf.bin_window_fraction(e, 0.001, [(0.100, 0.101), (0.1296, 0.150)]).numpy()
+    np.testing.assert_allclose(W, [[1, 0], [0, 0.4], [0, 0.5]], atol=1e-9)
+
+
+@pytest.mark.parametrize("representation", ["loss", "absolute"])
+def test_measured_model_windows(tmp_path, representation):
+    ds = synthetic_measured()
+    edges = garf.deposit_bins_from_metadata(ds)
+    sds, info = garf.spectral_classes(ds, edges, representation)  # stage measured
+    assert info["stage"] == "measured"
+    net = garf.train(
+        sds,
+        H=64,
+        L=2,
+        epochs=15,
+        batch_size=4000,
+        learning_rate=3e-3,
+        seed=3,
+        device="cpu",
+        verbose=False,
+    )
+    m = garf.SpectralArfModel(net, info).set_energy_windows(WINDOWS)
+    with pytest.raises(ValueError):
+        garf.SpectralArfModel(net, info).set_energy_windows(WINDOWS, RES)
+    rng = np.random.default_rng(5)
+    t = np.radians(1.0)
+    pdet = 0.5 * np.exp(-0.5 * 0.25)
+    loss = np.where(
+        rng.uniform(size=300_000) < 0.8, 0.0, rng.uniform(0.005, 0.060, 300_000)
+    )
+    x = blur_mc(0.1405 - loss, rng)
+    expected = [pdet * np.mean((x >= a / 1000) & (x < b / 1000)) for a, b in WINDOWS]
+    got = m.predict(
+        np.array([np.sin(t)]),
+        np.array([0.0]),
+        np.array([np.cos(t)]),
+        np.array([0.1405]),
+    )[0, 1:]
+    np.testing.assert_allclose(got, expected, rtol=0.1)
+    f = tmp_path / "m.garf"
+    m.save(f)
+    m2 = garf.ArfModel.load(f, device="cpu").set_energy_windows(WINDOWS)
+    assert m2.stage == "measured"

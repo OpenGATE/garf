@@ -30,5 +30,11 @@ from .dataset import (
 from .trainer import TrainingParameters, train
 from .symmetry import measure_symmetry, symmetry_table
 from .lut import LutArfModel, build_lut
-from .spectral import SpectralArfModel, spectral_classes, deposit_bins_from_metadata, window_response
+from .spectral import (
+    SpectralArfModel,
+    bin_window_fraction,
+    deposit_bins_from_metadata,
+    spectral_classes,
+    window_response,
+)
 from .detector import GarfDetector  # replaces garf_detector.GarfDetector (2.11)
