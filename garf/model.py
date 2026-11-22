@@ -215,6 +215,10 @@ class ArfModel:
             model = load_legacy_pth(path, state_index=legacy_state_index)
         else:
             model = load_garf(path)
+        if "spectral" in model.metadata:
+            from .spectral import SpectralArfModel
+
+            model = SpectralArfModel(model, model.metadata["spectral"])
         return model.to(device)
 
 

@@ -109,11 +109,17 @@ def load_training_dataset(filename, angle_convention=None):
     if not filename.is_file():
         raise FileNotFoundError(f"garf: training dataset '{filename}' not found")
     with uproot.open(filename) as f:
+        name = TREE_NAME
         if TREE_NAME not in f:
-            raise ValueError(
-                f"garf: '{filename}' has no tree '{TREE_NAME}', keys are {f.keys()}"
-            )
-        tree = f[TREE_NAME]
+            # the tree is named after the training actor: a single ARF tree is used
+            trees = sorted({k.split(";")[0] for k in f.keys(cycle=False)})
+            trees = [t for t in trees if t.startswith("ARF")]
+            if len(trees) != 1:
+                raise ValueError(
+                    f"garf: '{filename}' has no tree '{TREE_NAME}', keys are {f.keys()}"
+                )
+            name = trees[0]
+        tree = f[name]
         keys = set(tree.keys())
         a = tree.arrays(library="np")
 
