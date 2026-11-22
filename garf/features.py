@@ -9,6 +9,16 @@ Feature sets (columns, in this order):
 - "ux_uy_E"     : ux, uy, E                               (default for new models)
 - "legacy_acos" : acos(uy), acos(ux) (deg), E             (GATE 9, GATE <= 10.0.2)
 - "theta_phi"   : acos(uz), atan2(uy, ux) (deg), E        (GATE 10.0.3 to 10.1.2)
+- "symmetric"   : log(theta + theta0), cos(fold (phi - phi0)) tanh(theta / theta_core), E
+                  with theta = acos(uz), phi = atan2(uy, ux) (deg). For
+                  collimators with an n-fold symmetry (hexagonal holes:
+                  fold 6): the response then depends on phi only through
+                  cos(fold (phi - phi0)). log(theta) stretches the core (the
+                  collimator acceptance is a few degrees wide); the tanh
+                  switches the phi term off near the axis, where phi is
+                  undefined. Parameters (feature_params): fold, phi0_deg
+                  (orientation of the hole lattice in the plane frame),
+                  theta0_deg, theta_core_deg; see FEATURE_PARAMS.
 
 Old training datasets only store two angles ("Theta", "Phi"), whose meaning
 depends on the GATE version: direction_from_angles() converts them back to
@@ -18,9 +28,14 @@ direction cosines, for an explicitly given convention.
 import numpy as np
 import torch
 
-FEATURES = ("ux_uy_E", "legacy_acos", "theta_phi")
+FEATURES = ("ux_uy_E", "legacy_acos", "theta_phi", "symmetric")
 DEFAULT_FEATURES = "ux_uy_E"
 ANGLE_CONVENTIONS = ("legacy_acos", "theta_phi")
+
+# parameters of the feature sets that have some (default values)
+FEATURE_PARAMS = {
+    "symmetric": dict(fold=6, phi0_deg=0.0, theta0_deg=0.2, theta_core_deg=3.0),
+}
 
 
 def check_features(features):
@@ -30,12 +45,43 @@ def check_features(features):
         )
 
 
-def compute_features(features, ux, uy, uz, E):
+def resolve_feature_params(features, params=None):
+    """
+    Full parameter dict of a feature set (defaults completed), or None for
+    the feature sets without parameters. Unknown keys raise.
+    """
+    check_features(features)
+    defaults = FEATURE_PARAMS.get(features)
+    if defaults is None:
+        if params:
+            raise ValueError(f"garf: features '{features}' take no parameters")
+        return None
+    params = dict(params or {})
+    unknown = set(params) - set(defaults)
+    if unknown:
+        raise ValueError(
+            f"garf: unknown parameters {sorted(unknown)} for features '{features}', "
+            f"known: {sorted(defaults)}"
+        )
+    return {**defaults, **params}
+
+
+def compute_features(features, ux, uy, uz, E, params=None):
     """
     Network inputs (n, 3) from direction cosines and energy (torch tensors,
     same dtype and device). Cosines are clamped to [-1, 1] before acos.
+    params: feature parameters (see FEATURE_PARAMS), defaults if None.
     """
     check_features(features)
+    if features == "symmetric":
+        p = resolve_feature_params(features, params)
+        if p["phi0_deg"] == "auto":
+            raise ValueError("garf: phi0_deg 'auto' must be resolved (training)")
+        theta = torch.rad2deg(torch.arccos(torch.clamp(uz, -1, 1)))
+        phi = torch.atan2(uy, ux)
+        a = torch.cos(p["fold"] * (phi - np.radians(p["phi0_deg"])))
+        a = a * torch.tanh(theta / p["theta_core_deg"])
+        return torch.stack((torch.log(theta + p["theta0_deg"]), a, E), dim=1)
     if features == "ux_uy_E":
         return torch.stack((ux, uy, E), dim=1)
     if features == "legacy_acos":

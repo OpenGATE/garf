@@ -41,7 +41,10 @@ The network does not take the direction cosines directly. The input convention s
 | `legacy` | `θ = acos(uy)`, `φ = acos(ux)` (deg), `E` | GATE 9, GATE 10 ≤ 10.0.2 training actor, models in gate_data |
 | `theta_phi` | `θ = acos(uz)`, `φ = atan2(uy, ux)` (deg), `E` | GATE 10 ≥ 10.0.3 training actor |
 
-*(v3, planned)* The convention is stored in the model file and garf computes the inputs itself; users and GATE only pass `(ux, uy, uz, E)`. The input features of new models are still to be decided (`φ = atan2` is discontinuous at ±180°).
+*(v3)* The convention is stored in the model file and garf computes the inputs itself; users and GATE only pass `(ux, uy, uz, E)`. Feature sets for new models:
+
+- `ux_uy_E` (default): `ux`, `uy`, `E`; no assumption on the collimator.
+- `symmetric`: `log(θ + θ0)`, `cos(n (φ − φ0)) · tanh(θ / θc)`, `E`, with `θ = acos(uz)`, `φ = atan2(uy, ux)` (deg). For collimators with an n-fold symmetry (hexagonal holes: n = 6). In the tails (septal penetration) the response of a hexagonal-hole collimator has a 6-fold star pattern aligned with the hole lattice, and depends on φ only through `cos(6 (φ − φ0))`; `log θ` stretches the narrow core (the acceptance is a few degrees wide). Parameters (`feature_params`): `fold` (6), `phi0_deg` (`"auto"`: measured on the training dataset), `theta0_deg` (0.2), `theta_core_deg` (3); they are stored in the model. `garf_symmetry <dataset>` prints the measured pattern (amplitude and phase per θ bin) and `φ0`.
 
 ### Energy windows and Russian roulette
 

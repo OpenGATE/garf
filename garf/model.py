@@ -16,7 +16,7 @@ from pathlib import Path
 import torch
 
 from .arrays import check_same_length, is_numpy, to_output, to_tensor, move
-from .features import check_features, compute_features
+from .features import check_features, compute_features, resolve_feature_params
 
 FORMAT = "garf-arf"
 FORMAT_VERSION = 1
@@ -128,9 +128,10 @@ class ArfModel:
 
     model_type = None
 
-    def __init__(self, features, n_channels, rr, metadata=None):
+    def __init__(self, features, n_channels, rr, metadata=None, feature_params=None):
         check_features(features)
         self.features = features
+        self.feature_params = resolve_feature_params(features, feature_params)
         self.n_channels = int(n_channels)
         self.rr = float(rr)
         self.metadata = dict(metadata or {})
@@ -159,7 +160,7 @@ class ArfModel:
         uy, uz, E = (to_tensor(a, like=ux) for a in (uy, uz, E))
         check_same_length(ux=ux, uy=uy, uz=uz, E=E)
         with torch.no_grad():
-            x = compute_features(self.features, ux, uy, uz, E)
+            x = compute_features(self.features, ux, uy, uz, E, self.feature_params)
             probs = self._probs(x)
         if numpy_out:
             probs = probs.cpu().double()  # (mps has no float64)
@@ -180,6 +181,8 @@ class ArfModel:
             n_channels=self.n_channels,
             rr=self.rr,
         )
+        if self.feature_params is not None:
+            m["feature_params"] = self.feature_params
         m.setdefault("provenance", {})
         return m
 
@@ -232,9 +235,18 @@ class MlpArfModel(ArfModel):
     model_type = "mlp"
 
     def __init__(
-        self, nets, x_mean, x_std, features, n_channels, rr, architecture, metadata=None
+        self,
+        nets,
+        x_mean,
+        x_std,
+        features,
+        n_channels,
+        rr,
+        architecture,
+        metadata=None,
+        feature_params=None,
     ):
-        super().__init__(features, n_channels, rr, metadata)
+        super().__init__(features, n_channels, rr, metadata, feature_params)
         if not isinstance(nets, (list, tuple)):
             nets = [nets]
         if len(nets) == 0:
@@ -321,7 +333,11 @@ def load_garf(path):
     meta = read_garf_metadata(path)
     tensors = load_file(str(path))
     model_type = meta.get("model_type")
-    common = {k: meta.pop(k) for k in ("features", "n_channels", "rr") if k in meta}
+    common = {
+        k: meta.pop(k)
+        for k in ("features", "n_channels", "rr", "feature_params")
+        if k in meta
+    }
     for k in ("format", "format_version", "model_type"):
         meta.pop(k, None)
     if model_type == "mlp":

@@ -59,4 +59,5 @@ garf_plot_test_dataset = "garf.bin.garf_plot_test_dataset:garf_plot_training_dat
 garf_train = "garf.bin.garf_train:garf_train"
 garf_convert = "garf.bin.garf_convert:garf_convert"
 garf_nn_info = "garf.bin.garf_nn_info:garf_nn_info"
+garf_symmetry = "garf.bin.garf_symmetry:garf_symmetry"
 pytorch_info = "garf.bin.pytorch_info:pytorch_info"

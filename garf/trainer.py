@@ -22,13 +22,22 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .features import DEFAULT_FEATURES, check_features, compute_features
+from .features import (
+    DEFAULT_FEATURES,
+    check_features,
+    compute_features,
+    resolve_feature_params,
+)
+from .symmetry import measure_symmetry
 from .model import BLOCKS, MlpArfModel, garf_version, resolve_device
 
 
 @dataclass
 class TrainingParameters:
     features: str = DEFAULT_FEATURES
+    # parameters of the features (see garf.features.FEATURE_PARAMS); for
+    # "symmetric", phi0_deg "auto" (default) is measured on the training set
+    feature_params: dict = None
     H: int = 200
     L: int = 3
     block: str = "mlp"  # "mlp" | "residual" (L blocks of 2 layers)
@@ -46,6 +55,7 @@ class TrainingParameters:
 
     def __post_init__(self):
         check_features(self.features)
+        resolve_feature_params(self.features, self.feature_params)  # check keys
         if self.lr_schedule not in ("cosine", "constant"):
             raise ValueError(f"garf: unknown lr_schedule '{self.lr_schedule}'")
         if self.block not in BLOCKS:
@@ -65,12 +75,36 @@ class TrainingParameters:
         return cls(**d)
 
 
-def _inputs(dataset, features):
+def _inputs(dataset, features, feature_params=None):
     t = [
         torch.from_numpy(np.asarray(a, dtype=np.float64))
         for a in (dataset.ux, dataset.uy, dataset.uz, dataset.E)
     ]
-    return compute_features(features, *t)
+    return compute_features(features, *t, params=feature_params)
+
+
+def _resolve_training_feature_params(p, dataset, log):
+    """Feature parameters for the model; phi0 'auto' measured on the dataset."""
+    if p.features != "symmetric":
+        return resolve_feature_params(p.features, p.feature_params), None
+    fp = dict(p.feature_params or {})
+    fp.setdefault("phi0_deg", "auto")
+    fp = resolve_feature_params(p.features, fp)
+    sym = None
+    if fp["phi0_deg"] == "auto":
+        sym = measure_symmetry(
+            dataset.ux, dataset.uy, dataset.uz, dataset.window, fold=fp["fold"]
+        )
+        if sym["phi0_deg"] is None:
+            warnings.warn(
+                f"garf: no significant {fp['fold']}-fold pattern in the training "
+                f"data, phi0 set to 0"
+            )
+            fp["phi0_deg"] = 0.0
+        else:
+            fp["phi0_deg"] = round(sym["phi0_deg"], 2)
+        log(f"garf train: {fp['fold']}-fold symmetry, phi0 = {fp['phi0_deg']} deg (measured)")
+    return fp, sym
 
 
 def _loss(net, x, y, w):
@@ -128,7 +162,8 @@ def train(dataset, params=None, verbose=True, **kwargs):
     n_channels = dataset.n_channels
 
     train_set, val_set = dataset.split(p.validation_fraction, seed=seed)
-    x_train = _inputs(train_set, p.features)
+    feature_params, symmetry = _resolve_training_feature_params(p, train_set, log)
+    x_train = _inputs(train_set, p.features, feature_params)
     x_mean = x_train.mean(dim=0)
     x_std = x_train.std(dim=0)
     if torch.any(x_std == 0):
@@ -146,7 +181,7 @@ def train(dataset, params=None, verbose=True, **kwargs):
         return x, y, w
 
     xt, yt, wt = prepare(train_set, x_train)
-    xv, yv, wv = prepare(val_set, _inputs(val_set, p.features))
+    xv, yv, wv = prepare(val_set, _inputs(val_set, p.features, feature_params))
     use_val = len(val_set) > 0
     log(
         f"garf train: {len(train_set)} training, {len(val_set)} validation entries, "
@@ -177,6 +212,7 @@ def train(dataset, params=None, verbose=True, **kwargs):
             "angle_convention": dataset.metadata.get("angle_convention"),
         },
         "networks": histories,
+        "symmetry": symmetry,
         "start": start,
         "end": time.strftime("%Y-%m-%d %H:%M:%S"),
         "hostname": socket.gethostname(),
@@ -194,6 +230,7 @@ def train(dataset, params=None, verbose=True, **kwargs):
         rr=rr,
         architecture=architecture,
         metadata=metadata,
+        feature_params=feature_params,
     )
     return model.to("cpu")
 

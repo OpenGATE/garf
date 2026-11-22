@@ -6,7 +6,9 @@ from .garf_detector import *
 # garf v3 API
 from .features import (
     FEATURES,
+    FEATURE_PARAMS,
     DEFAULT_FEATURES,
+    resolve_feature_params,
     compute_features,
     direction_from_angles,
     check_angles,
@@ -26,4 +28,5 @@ from .dataset import (
     write_training_dataset,
 )
 from .trainer import TrainingParameters, train
+from .symmetry import measure_symmetry, symmetry_table
 from .detector import GarfDetector  # replaces garf_detector.GarfDetector (2.11)
