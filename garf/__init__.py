@@ -29,4 +29,5 @@ from .dataset import (
 )
 from .trainer import TrainingParameters, train
 from .symmetry import measure_symmetry, symmetry_table
+from .lut import LutArfModel, build_lut
 from .detector import GarfDetector  # replaces garf_detector.GarfDetector (2.11)

@@ -17,7 +17,7 @@ def star_probability(theta_deg, phi_deg, phi0=10.0, fold=6):
     """Detection probability: narrow core + tail with a fold-fold star."""
     core = 0.6 * np.exp(-0.5 * (theta_deg / 1.5) ** 2)
     tail = 0.05 * np.exp(-theta_deg / 15) * (1 + 0.6 * np.cos(np.radians(fold * (phi_deg - phi0))))
-    return core + tail * (theta_deg > 2)
+    return core + tail / (1 + np.exp(-(theta_deg - 2) / 0.3))  # smooth step at 2 deg
 
 
 def star_dataset(n=300_000, seed=3, phi0=10.0, fold=6):

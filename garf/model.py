@@ -362,6 +362,18 @@ def load_garf(path):
             metadata=meta,
             **common,
         )
+    if model_type == "lut":
+        from .lut import LutArfModel
+
+        meta.pop("table_shape", None)
+        return LutArfModel(
+            tensors["probs"],
+            [tensors["edges_theta"], tensors["edges_phi"], tensors["edges_E"]],
+            tensors["counts"],
+            tensors["counts0"],
+            metadata=meta,
+            **common,
+        )
     raise ValueError(f"garf: unknown model type '{model_type}' in '{path}'")
 
 

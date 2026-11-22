@@ -19,6 +19,11 @@ Feature sets (columns, in this order):
                   undefined. Parameters (feature_params): fold, phi0_deg
                   (orientation of the hole lattice in the plane frame),
                   theta0_deg, theta_core_deg; see FEATURE_PARAMS.
+- "theta_phifold_E": theta (deg), phi folded into [0, 180 / fold] (deg), E.
+                  The fundamental domain of the n-fold symmetry with mirror
+                  (phi - phi0 modulo 360 / fold, then mirrored): all the
+                  symmetric directions get the same value. Used by the
+                  table ARF (LutArfModel). Parameters: fold, phi0_deg.
 
 Old training datasets only store two angles ("Theta", "Phi"), whose meaning
 depends on the GATE version: direction_from_angles() converts them back to
@@ -28,13 +33,14 @@ direction cosines, for an explicitly given convention.
 import numpy as np
 import torch
 
-FEATURES = ("ux_uy_E", "legacy_acos", "theta_phi", "symmetric")
+FEATURES = ("ux_uy_E", "legacy_acos", "theta_phi", "symmetric", "theta_phifold_E")
 DEFAULT_FEATURES = "ux_uy_E"
 ANGLE_CONVENTIONS = ("legacy_acos", "theta_phi")
 
 # parameters of the feature sets that have some (default values)
 FEATURE_PARAMS = {
     "symmetric": dict(fold=6, phi0_deg=0.0, theta0_deg=0.2, theta_core_deg=3.0),
+    "theta_phifold_E": dict(fold=6, phi0_deg=0.0),
 }
 
 
@@ -73,6 +79,15 @@ def compute_features(features, ux, uy, uz, E, params=None):
     params: feature parameters (see FEATURE_PARAMS), defaults if None.
     """
     check_features(features)
+    if features == "theta_phifold_E":
+        p = resolve_feature_params(features, params)
+        if p["phi0_deg"] == "auto":
+            raise ValueError("garf: phi0_deg 'auto' must be resolved (training)")
+        theta = torch.rad2deg(torch.arccos(torch.clamp(uz, -1, 1)))
+        period = 360.0 / p["fold"]
+        psi = torch.remainder(torch.rad2deg(torch.atan2(uy, ux)) - p["phi0_deg"], period)
+        psi = torch.minimum(psi, period - psi)
+        return torch.stack((theta, psi, E), dim=1)
     if features == "symmetric":
         p = resolve_feature_params(features, params)
         if p["phi0_deg"] == "auto":

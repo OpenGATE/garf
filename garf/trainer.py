@@ -83,13 +83,20 @@ def _inputs(dataset, features, feature_params=None):
     return compute_features(features, *t, params=feature_params)
 
 
-def _resolve_training_feature_params(p, dataset, log):
-    """Feature parameters for the model; phi0 'auto' measured on the dataset."""
-    if p.features != "symmetric":
-        return resolve_feature_params(p.features, p.feature_params), None
-    fp = dict(p.feature_params or {})
+SYMMETRY_FEATURES = ("symmetric", "theta_phifold_E")
+
+
+def resolve_dataset_feature_params(features, feature_params, dataset, log=print):
+    """
+    Feature parameters for a model built from a dataset; for the symmetry
+    features, phi0_deg 'auto' (default) is measured on the dataset.
+    Returns (params, symmetry measurement or None).
+    """
+    if features not in SYMMETRY_FEATURES:
+        return resolve_feature_params(features, feature_params), None
+    fp = dict(feature_params or {})
     fp.setdefault("phi0_deg", "auto")
-    fp = resolve_feature_params(p.features, fp)
+    fp = resolve_feature_params(features, fp)
     sym = None
     if fp["phi0_deg"] == "auto":
         sym = measure_symmetry(
@@ -165,7 +172,9 @@ def train(dataset, params=None, verbose=True, **kwargs):
     n_channels = dataset.n_channels
 
     train_set, val_set = dataset.split(p.validation_fraction, seed=seed)
-    feature_params, symmetry = _resolve_training_feature_params(p, train_set, log)
+    feature_params, symmetry = resolve_dataset_feature_params(
+        p.features, p.feature_params, train_set, log
+    )
     x_train = _inputs(train_set, p.features, feature_params)
     x_mean = x_train.mean(dim=0)
     x_std = x_train.std(dim=0)
